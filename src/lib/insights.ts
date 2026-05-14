@@ -40,18 +40,24 @@ export function statusEmoji(s: Status): string {
   }
 }
 
-/** Compute percent delta of `value` from the average of `series` (excluding value if present). */
+/** Compute percent delta of `value` from the average of `series`.
+ * Pass `excludeIndex` (typically `series.length - 1` for today) to exclude by
+ * position rather than by value, avoiding false exclusions when two readings
+ * happen to be equal. */
 export function deltaVsAverage(
   value: number | undefined,
   series: Array<number | undefined>,
+  excludeIndex?: number,
 ): { delta: number; pct: number; avg: number } | null {
   if (value == null) return null;
-  const rest = series.filter((v): v is number => v != null && v !== value);
-  if (rest.length === 0) return null;
-  const avg = rest.reduce((a, b) => a + b, 0) / rest.length;
-  if (avg === 0) return null;
+  const baseline = series
+    .map((v, i) => ({ v, i }))
+    .filter(({ v, i }) => v != null && i !== excludeIndex)
+    .map(({ v }) => v as number);
+  if (baseline.length < 2) return null;
+  const avg = baseline.reduce((a, b) => a + b, 0) / baseline.length;
   const delta = value - avg;
-  const pct = (delta / avg) * 100;
+  const pct = avg === 0 ? 0 : (delta / avg) * 100;
   return { delta, pct, avg };
 }
 
@@ -457,7 +463,8 @@ function hr(value: number): Insight {
 }
 
 function hrv(value: number, series?: Array<number | undefined>): Insight {
-  const delta = deltaVsAverage(value, series ?? []);
+  const s = series ?? [];
+  const delta = deltaVsAverage(value, s, s.length - 1);
 
   if (!delta) {
     return {

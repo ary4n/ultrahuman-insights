@@ -50,12 +50,40 @@ function ensureChartsDir(): string {
   return dir;
 }
 
-/** Write SVG content to a stable file (name is a hash of the content) and return a file:// URL. */
+/** Write SVG content to a stable file (name is a hash of the content) and return a file:// URL.
+ * Skips the write if the file already exists (content-hashed names are immutable). */
 function svgToFileUrl(svg: string, filename: string): string {
   const dir = ensureChartsDir();
   const filepath = path.join(dir, filename);
-  fs.writeFileSync(filepath, svg, "utf8");
+  if (!fs.existsSync(filepath)) {
+    fs.writeFileSync(filepath, svg, "utf8");
+  }
   return `file://${filepath}`;
+}
+
+/** Delete .svg files in the charts directory older than 24 hours.
+ * Safe to call fire-and-forget; all I/O is async. */
+export async function cleanupOldCharts(): Promise<void> {
+  const dir = path.join(environment.supportPath, "charts");
+  if (!fs.existsSync(dir)) return;
+  const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const files = await fs.promises.readdir(dir);
+  await Promise.all(
+    files
+      .filter((f) => f.endsWith(".svg"))
+      .map(async (f) => {
+        const fp = path.join(dir, f);
+        try {
+          const stat = await fs.promises.stat(fp);
+          if (now - stat.mtimeMs > MAX_AGE_MS) {
+            await fs.promises.unlink(fp);
+          }
+        } catch {
+          // Ignore races (file already gone, etc.)
+        }
+      }),
+  );
 }
 
 /** Hash a string to a short hex string for stable filenames. */

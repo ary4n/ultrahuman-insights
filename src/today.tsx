@@ -8,7 +8,13 @@ import {
 import { useCallback, useMemo } from "react";
 import { getRange, clearRange } from "./lib/cache";
 import { DailyMetricsRange, METRIC_LABELS, MetricName } from "./lib/types";
-import { formatDuration, fmt, lastNDaysEpoch, sparkline } from "./lib/format";
+import {
+  formatDuration,
+  fmt,
+  lastNDaysEpoch,
+  sparkline,
+  todayDateKey,
+} from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
 import { insightFor, deltaVsAverage, Insight } from "./lib/insights";
 import { metricIcon } from "./lib/icons";
@@ -52,7 +58,7 @@ function trendLine(
   value: number | undefined,
   series: Array<number | undefined>,
 ): string {
-  const delta = deltaVsAverage(value, series);
+  const delta = deltaVsAverage(value, series, series.length - 1);
   if (!delta) return "";
   const { delta: d, pct, avg } = delta;
   if (Math.abs(pct) <= 1) return "";
@@ -131,7 +137,8 @@ function detailMarkdown(
 }
 
 export default function Today() {
-  const range = useMemo(() => lastNDaysEpoch(7), []);
+  const dateKey = todayDateKey();
+  const range = useMemo(() => lastNDaysEpoch(7), [dateKey]);
   const fetcher = useCallback(() => getRange(range.start, range.end), [range]);
   const { data, stale, loading, missingToken, error, reload } =
     useMetrics<DailyMetricsRange>(fetcher);
@@ -161,9 +168,13 @@ export default function Today() {
   }
 
   // Today is the last element of the sorted range
-  const sorted = data
-    ? [...data].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
-    : [];
+  const sorted = useMemo(
+    () =>
+      data
+        ? [...data].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
+        : [],
+    [data],
+  );
   const todayData = sorted[sorted.length - 1] ?? null;
 
   const metrics = Object.keys(METRIC_LABELS) as MetricName[];

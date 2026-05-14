@@ -8,7 +8,7 @@ import {
 import { useCallback, useMemo } from "react";
 import { getRange, clearRange } from "./lib/cache";
 import { DailyMetricsRange } from "./lib/types";
-import { formatDuration, fmt, lastNDaysEpoch } from "./lib/format";
+import { formatDuration, fmt, lastNDaysEpoch, todayDateKey } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
 import { insightFor, deltaVsAverage } from "./lib/insights";
 import { lineChart, stagesBar, colorToHex } from "./lib/charts";
@@ -53,7 +53,7 @@ function markdownFor(
   }
 
   // Trend delta
-  const delta = deltaVsAverage(score, scoreSeries);
+  const delta = deltaVsAverage(score, scoreSeries, scoreSeries.length - 1);
   if (delta && Math.abs(delta.pct) > 1) {
     const up = delta.delta > 0;
     const bigMove = Math.abs(delta.pct) > 5;
@@ -125,7 +125,8 @@ function markdownFor(
 }
 
 export default function Sleep() {
-  const range = useMemo(() => lastNDaysEpoch(7), []);
+  const dateKey = todayDateKey();
+  const range = useMemo(() => lastNDaysEpoch(7), [dateKey]);
   const fetcher = useCallback(() => getRange(range.start, range.end), [range]);
   const { data, stale, loading, missingToken, error, reload } =
     useMetrics<DailyMetricsRange>(fetcher);

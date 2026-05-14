@@ -2,15 +2,26 @@ import { DailyMetrics, DailyMetricsRange } from "./types";
 import { getApiToken } from "./prefs";
 
 const BASE_URL = "https://partner.ultrahuman.com/api/v1/partner";
+const FETCH_TIMEOUT_MS = 10_000;
+
+const REDACTED = "<redacted>";
+const JWT_PATTERN =
+  /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g;
+function sanitize(s: string): string {
+  return s.replace(JWT_PATTERN, REDACTED).slice(0, 200);
+}
 
 export class UltrahumanError extends Error {
   constructor(
     public status: number,
-    public body: string,
+    body: string,
   ) {
-    super(`Ultrahuman API ${status}: ${body.slice(0, 200)}`);
+    const safe = sanitize(body);
+    super(`Ultrahuman API ${status}: ${safe}`);
+    this.body = safe;
     this.name = "UltrahumanError";
   }
+  body: string;
 }
 
 export class MissingTokenError extends Error {
@@ -124,10 +135,24 @@ async function call(
   );
   const url = `${BASE_URL}/daily_metrics?${query.toString()}`;
 
-  const res = await fetch(url, {
-    method: "GET",
-    headers: { Authorization: token },
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "GET",
+      headers: { Authorization: token },
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new UltrahumanError(0, "Request timed out");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!res.ok) {
     const body = await res.text();

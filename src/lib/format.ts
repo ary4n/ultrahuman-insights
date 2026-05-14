@@ -46,16 +46,24 @@ export function formatDate(d: Date): string {
 }
 
 /** Return [startEpochSeconds, endEpochSeconds] covering the last N days inclusive of today. */
-export function lastNDaysEpoch(n: number): { start: number; end: number } {
-  const end = new Date();
+export function lastNDaysEpoch(
+  n: number,
+  now: Date = new Date(),
+): { start: number; end: number } {
+  const end = new Date(now);
   end.setHours(23, 59, 59, 0);
-  const start = new Date();
+  const start = new Date(now);
   start.setDate(start.getDate() - (n - 1));
   start.setHours(0, 0, 0, 0);
   return {
     start: Math.floor(start.getTime() / 1000),
     end: Math.floor(end.getTime() / 1000),
   };
+}
+
+/** Today's date as YYYY-MM-DD — same value as today(). Use as a useMemo dep for midnight rollover. */
+export function todayDateKey(): string {
+  return today();
 }
 
 /** ASCII sparkline for a series of numbers (last N values). Missing values render as space. */

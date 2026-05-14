@@ -8,7 +8,7 @@ import {
 import { useCallback, useMemo } from "react";
 import { getRange, clearRange } from "./lib/cache";
 import { DailyMetricsRange } from "./lib/types";
-import { fmt, lastNDaysEpoch } from "./lib/format";
+import { fmt, lastNDaysEpoch, todayDateKey } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
 import { insightFor, deltaVsAverage } from "./lib/insights";
 import { lineChart, colorToHex } from "./lib/charts";
@@ -20,7 +20,7 @@ function trendDeltaLine(
   series: Array<number | undefined>,
 ): string {
   if (value == null) return "";
-  const delta = deltaVsAverage(value, series);
+  const delta = deltaVsAverage(value, series, series.length - 1);
   if (!delta || Math.abs(delta.pct) <= 1)
     return `Today: **${fmt(value, unit)}**`;
   const up = delta.delta > 0;
@@ -120,7 +120,8 @@ function markdownFor(
 }
 
 export default function Hrv() {
-  const range = useMemo(() => lastNDaysEpoch(7), []);
+  const dateKey = todayDateKey();
+  const range = useMemo(() => lastNDaysEpoch(7), [dateKey]);
   const fetcher = useCallback(() => getRange(range.start, range.end), [range]);
   const { data, stale, loading, missingToken, error, reload } =
     useMetrics<DailyMetricsRange>(fetcher);

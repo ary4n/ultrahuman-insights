@@ -4,13 +4,19 @@ import {
   launchCommand,
   LaunchType,
 } from "@raycast/api";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { getDay, clearDay } from "./lib/cache";
 import { today, formatDuration, scoreEmoji, fmt } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
+import { cleanupOldCharts } from "./lib/charts";
 
 export default function MenuBar() {
-  const fetcher = useCallback(() => getDay(today()), []);
+  const dateKey = today();
+  const fetcher = useCallback(() => getDay(dateKey), [dateKey]);
+
+  useEffect(() => {
+    cleanupOldCharts().catch(() => {});
+  }, []);
   const { data, stale, loading, missingToken, error, reload } =
     useMetrics(fetcher);
 
