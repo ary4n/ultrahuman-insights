@@ -96,7 +96,19 @@ function normalizeOne(date: string, entries: RawMetricEntry[]): DailyMetrics {
     hrv: byType["hrv"]?.avg,
     hr: byType["hr"]?.last_reading,
     night_rhr: byType["night_rhr"]?.avg,
-    spo2: byType["spo2"]?.avg,
+    // The API's `spo2.avg` includes zero-padded time slots (no-reading intervals
+    // are stored as 0), making the average meaningless (e.g. avg=1 for a night
+    // with only two actual readings of 97% and 94%). Instead we compute the
+    // average of non-zero values from the values array, which are real % readings.
+    spo2: (() => {
+      const readings: number[] = (byType["spo2"]?.values ?? [])
+        .map((v: { value: number }) => v.value)
+        .filter((v: number) => v > 0);
+      if (readings.length === 0) return undefined;
+      return Math.round(
+        readings.reduce((a: number, b: number) => a + b, 0) / readings.length,
+      );
+    })(),
     steps: byType["steps"]?.total,
     recovery_index: byType["recovery_index"]?.value,
     movement_index: byType["movement_index"]?.value,
