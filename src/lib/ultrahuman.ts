@@ -20,10 +20,89 @@ export class MissingTokenError extends Error {
   }
 }
 
-async function call<T>(
-  path: string,
+// ---------------------------------------------------------------------------
+// Raw wire-format types
+// ---------------------------------------------------------------------------
+
+interface RawMetricEntry {
+  type: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  object: Record<string, any>;
+}
+
+interface RawSleepObject {
+  sleep_score?: { score?: number };
+  total_sleep?: { minutes?: number };
+  sleep_efficiency?: { percentage?: number };
+  rem_sleep?: { minutes?: number };
+  deep_sleep?: { minutes?: number };
+  light_sleep?: { minutes?: number };
+  restorative_sleep?: { percentage?: number };
+  temperature_deviation?: { celsius?: number };
+  hr_drop?: { value?: number } | null | undefined;
+  average_body_temperature?: { celsius?: number };
+  full_sleep_cycles?: { cycles?: number };
+  tosses_and_turns?: { count?: number };
+  movements?: { count?: number };
+  morning_alertness?: { minutes?: number };
+}
+
+interface RawApiResponse {
+  data: {
+    metrics: Record<string, RawMetricEntry[]>;
+    latest_time_zone?: string;
+  };
+  error: string | null;
+  status?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Normalizer
+// ---------------------------------------------------------------------------
+
+function normalizeOne(date: string, entries: RawMetricEntry[]): DailyMetrics {
+  const byType = Object.fromEntries(entries.map((e) => [e.type, e.object]));
+
+  const sleep: RawSleepObject = byType["sleep"] ?? {};
+
+  return {
+    date,
+    // Sleep object (nested scalars)
+    sleep_score: sleep.sleep_score?.score,
+    total_sleep: sleep.total_sleep?.minutes,
+    sleep_efficiency: sleep.sleep_efficiency?.percentage,
+    rem_sleep: sleep.rem_sleep?.minutes,
+    deep_sleep: sleep.deep_sleep?.minutes,
+    light_sleep: sleep.light_sleep?.minutes,
+    restorative_sleep: sleep.restorative_sleep?.percentage,
+    temperature_deviation: sleep.temperature_deviation?.celsius,
+    hr_drop: sleep.hr_drop?.value,
+    avg_body_temperature: sleep.average_body_temperature?.celsius,
+    sleep_cycles: sleep.full_sleep_cycles?.cycles,
+    tosses_turns: sleep.tosses_and_turns?.count,
+    movements: sleep.movements?.count,
+    morning_alertness: sleep.morning_alertness?.minutes,
+    // Top-level scalars
+    hrv: byType["hrv"]?.avg,
+    hr: byType["hr"]?.last_reading,
+    night_rhr: byType["night_rhr"]?.avg,
+    spo2: byType["spo2"]?.avg,
+    steps: byType["steps"]?.total,
+    recovery_index: byType["recovery_index"]?.value,
+    movement_index: byType["movement_index"]?.value,
+    vo2_max: byType["vo2_max"]?.value,
+    active_minutes: byType["active_minutes"]?.value,
+    temp: byType["temp"]?.last_reading,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// HTTP helper
+// ---------------------------------------------------------------------------
+
+async function call(
   params: Record<string, string | number>,
-): Promise<T> {
+): Promise<RawApiResponse> {
   const token = getApiToken();
   if (!token) throw new MissingTokenError();
 
@@ -33,7 +112,7 @@ async function call<T>(
       return acc;
     }, {}),
   );
-  const url = `${BASE_URL}${path}?${query.toString()}`;
+  const url = `${BASE_URL}/daily_metrics?${query.toString()}`;
 
   const res = await fetch(url, {
     method: "GET",
@@ -45,21 +124,35 @@ async function call<T>(
     throw new UltrahumanError(res.status, body);
   }
 
-  return (await res.json()) as T;
+  const json = (await res.json()) as RawApiResponse;
+
+  if (json.error != null) {
+    throw new UltrahumanError(0, json.error);
+  }
+
+  return json;
 }
 
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 /** Fetch all metrics for a single date (YYYY-MM-DD). */
-export function fetchDay(date: string): Promise<DailyMetrics> {
-  return call<DailyMetrics>("/daily_metrics", { date });
+export async function fetchDay(date: string): Promise<DailyMetrics> {
+  const raw = await call({ date });
+  const metrics = raw.data.metrics;
+  const dateKey = Object.keys(metrics)[0] ?? date;
+  const entries = metrics[dateKey] ?? [];
+  return normalizeOne(dateKey, entries);
 }
 
 /** Fetch metrics across an epoch range. Ultrahuman caps the window at 7 days. */
-export function fetchRange(
+export async function fetchRange(
   startEpoch: number,
   endEpoch: number,
 ): Promise<DailyMetricsRange> {
-  return call<DailyMetricsRange>("/daily_metrics", {
-    start_epoch: startEpoch,
-    end_epoch: endEpoch,
-  });
+  const raw = await call({ start_epoch: startEpoch, end_epoch: endEpoch });
+  return Object.entries(raw.data.metrics)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([d, entries]) => normalizeOne(d, entries));
 }

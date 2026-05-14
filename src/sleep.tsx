@@ -56,7 +56,7 @@ function markdownFor(
     `- **Temperature Deviation:** ${fmt(d.temperature_deviation, "°C")}`,
     "",
     "## Quality",
-    `- **Restorative Sleep:** ${formatDuration(d.restorative_sleep)}`,
+    `- **Restorative Sleep:** ${fmt(d.restorative_sleep, "%")}`,
     `- **Sleep Cycles:** ${fmt(d.sleep_cycles)}`,
     `- **Tosses & Turns:** ${fmt(d.tosses_turns)}`,
     `- **Morning Alertness:** ${fmt(d.morning_alertness)}`,

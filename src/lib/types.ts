@@ -25,7 +25,7 @@ export interface DailyMetrics {
   rem_sleep?: number;
   deep_sleep?: number;
   light_sleep?: number;
-  restorative_sleep?: number;
+  restorative_sleep?: number; // percentage (0–100), NOT minutes
   sleep_cycles?: number;
   tosses_turns?: number;
   morning_alertness?: number;
