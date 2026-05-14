@@ -1,6 +1,8 @@
 import { getDay } from "../lib/cache";
 import { today } from "../lib/format";
-import { METRIC_LABELS } from "../lib/types";
+import { METRIC_LABELS, MetricName } from "../lib/types";
+
+const VALID_METRICS = Object.keys(METRIC_LABELS) as MetricName[];
 
 type Input = {
   /**
@@ -36,6 +38,11 @@ type Input = {
  * Use when the user asks about one specific metric like "what was my HRV on Monday".
  */
 export default async function tool(input: Input) {
+  if (!VALID_METRICS.includes(input.metric)) {
+    throw new Error(
+      `Unknown metric: "${input.metric}". Valid metrics: ${VALID_METRICS.join(", ")}`,
+    );
+  }
   const date = input.date ?? today();
   const { data, stale } = await getDay(date);
   const value = data[input.metric];

@@ -65,7 +65,7 @@ function normalizeOne(date: string, entries: RawMetricEntry[]): DailyMetrics {
 
   const sleep: RawSleepObject = byType["sleep"] ?? {};
 
-  return {
+  const result: DailyMetrics = {
     date,
     // Sleep object (nested scalars)
     sleep_score: sleep.sleep_score?.score,
@@ -94,6 +94,16 @@ function normalizeOne(date: string, entries: RawMetricEntry[]): DailyMetrics {
     active_minutes: byType["active_minutes"]?.value,
     temp: byType["temp"]?.last_reading,
   };
+
+  // Reject empty/unrecognized responses — don't cache garbage
+  const hasData = Object.entries(result).some(
+    ([k, v]) => k !== "date" && v !== undefined,
+  );
+  if (!hasData) {
+    throw new UltrahumanError(0, "Empty or unrecognized response");
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------

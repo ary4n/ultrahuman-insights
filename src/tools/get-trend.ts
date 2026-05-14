@@ -1,6 +1,8 @@
 import { getRange } from "../lib/cache";
 import { lastNDaysEpoch } from "../lib/format";
-import { METRIC_LABELS } from "../lib/types";
+import { METRIC_LABELS, MetricName } from "../lib/types";
+
+const VALID_METRICS = Object.keys(METRIC_LABELS) as MetricName[];
 
 type Input = {
   /** Which metric. One of: sleep_score, total_sleep, rem_sleep, deep_sleep,
@@ -33,6 +35,11 @@ type Input = {
  * been this week", "show me my recovery over the past 5 days".
  */
 export default async function tool(input: Input) {
+  if (!VALID_METRICS.includes(input.metric)) {
+    throw new Error(
+      `Unknown metric: "${input.metric}". Valid metrics: ${VALID_METRICS.join(", ")}`,
+    );
+  }
   const days = Math.min(7, Math.max(1, input.days ?? 7));
   const { start, end } = lastNDaysEpoch(days);
   const { data, stale } = await getRange(start, end);

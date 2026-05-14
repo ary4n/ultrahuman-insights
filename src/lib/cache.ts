@@ -4,11 +4,15 @@ import { DailyMetrics, DailyMetricsRange } from "./types";
 
 const cache = new Cache({ namespace: "ultrahuman" });
 const TTL_MS = 5 * 60 * 1000;
+const STALE_MAX_MS = 24 * 60 * 60 * 1000;
 
 interface Entry<T> {
   data: T;
   fetchedAt: number;
 }
+
+// De-dupe concurrent fetches for the same key
+const inflight = new Map<string, Promise<Memoized<unknown>>>();
 
 export interface Memoized<T> {
   data: T;
@@ -21,20 +25,46 @@ async function memoize<T>(
   fetcher: () => Promise<T>,
 ): Promise<Memoized<T>> {
   const raw = cache.get(key);
-  const cached: Entry<T> | null = raw ? (JSON.parse(raw) as Entry<T>) : null;
+  let cached: Entry<T> | null = null;
+  if (raw) {
+    try {
+      cached = JSON.parse(raw) as Entry<T>;
+    } catch {
+      // Corrupted entry — treat as no entry
+      cached = null;
+    }
+  }
 
   if (cached && Date.now() - cached.fetchedAt < TTL_MS) {
     return { data: cached.data, stale: false };
   }
 
-  try {
-    const data = await fetcher();
-    cache.set(key, JSON.stringify({ data, fetchedAt: Date.now() }));
-    return { data, stale: false };
-  } catch (e) {
-    if (cached) return { data: cached.data, stale: true };
-    throw e;
+  // Check inflight de-dupe
+  const existing = inflight.get(key);
+  if (existing) {
+    return existing as Promise<Memoized<T>>;
   }
+
+  const promise = fetcher()
+    .then((data) => {
+      cache.set(key, JSON.stringify({ data, fetchedAt: Date.now() }));
+      return { data, stale: false } as Memoized<T>;
+    })
+    .catch((e) => {
+      if (cached) {
+        if (Date.now() - cached.fetchedAt > STALE_MAX_MS) {
+          throw e;
+        }
+        return { data: cached.data, stale: true } as Memoized<T>;
+      }
+      throw e;
+    })
+    .finally(() => {
+      inflight.delete(key);
+    });
+
+  inflight.set(key, promise as Promise<Memoized<unknown>>);
+  return promise;
 }
 
 export function getDay(date: string): Promise<Memoized<DailyMetrics>> {
