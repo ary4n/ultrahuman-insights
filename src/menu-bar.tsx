@@ -6,20 +6,17 @@ import {
   launchCommand,
   LaunchType,
 } from "@raycast/api";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { getDay, clearDay } from "./lib/cache";
 import { today, formatDuration, fmt } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
-import { cleanupOldCharts } from "./lib/charts";
 import { insightFor, statusColor } from "./lib/insights";
 
 export default function MenuBar() {
   const dateKey = today();
   const fetcher = useCallback(() => getDay(dateKey), [dateKey]);
 
-  useEffect(() => {
-    cleanupOldCharts().catch(() => {});
-  }, []);
+  // Legacy charts directory cleanup is handled automatically on charts.ts import.
   const { data, stale, loading, missingToken, error, reload } =
     useMetrics(fetcher);
 

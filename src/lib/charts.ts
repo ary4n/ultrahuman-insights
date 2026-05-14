@@ -3,6 +3,15 @@ import * as fs from "fs";
 import * as path from "path";
 import { Color } from "@raycast/api";
 
+// ---------------------------------------------------------------------------
+// One-time cleanup of the now-orphaned file-based charts directory
+// ---------------------------------------------------------------------------
+
+(function cleanupLegacyChartsDir() {
+  const dir = path.join(environment.supportPath, "charts");
+  fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
+})();
+
 export interface ChartOpts {
   width?: number;
   height?: number;
@@ -39,60 +48,15 @@ export function colorToHex(c: Color | string): string {
 }
 
 // ---------------------------------------------------------------------------
-// File-write helpers
+// Data URI helper  (stateless — no file I/O required)
 // ---------------------------------------------------------------------------
 
-function ensureChartsDir(): string {
-  const dir = path.join(environment.supportPath, "charts");
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-}
-
-/** Write SVG content to a stable file (name is a hash of the content) and return a file:// URL.
- * Skips the write if the file already exists (content-hashed names are immutable). */
-function svgToFileUrl(svg: string, filename: string): string {
-  const dir = ensureChartsDir();
-  const filepath = path.join(dir, filename);
-  if (!fs.existsSync(filepath)) {
-    fs.writeFileSync(filepath, svg, "utf8");
-  }
-  return `file://${filepath}`;
-}
-
-/** Delete .svg files in the charts directory older than 24 hours.
- * Safe to call fire-and-forget; all I/O is async. */
-export async function cleanupOldCharts(): Promise<void> {
-  const dir = path.join(environment.supportPath, "charts");
-  if (!fs.existsSync(dir)) return;
-  const MAX_AGE_MS = 24 * 60 * 60 * 1000;
-  const now = Date.now();
-  const files = await fs.promises.readdir(dir);
-  await Promise.all(
-    files
-      .filter((f) => f.endsWith(".svg"))
-      .map(async (f) => {
-        const fp = path.join(dir, f);
-        try {
-          const stat = await fs.promises.stat(fp);
-          if (now - stat.mtimeMs > MAX_AGE_MS) {
-            await fs.promises.unlink(fp);
-          }
-        } catch {
-          // Ignore races (file already gone, etc.)
-        }
-      }),
-  );
-}
-
-/** Hash a string to a short hex string for stable filenames. */
-function hashStr(s: string): string {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
-  }
-  return Math.abs(h).toString(16).padStart(8, "0");
+/** Encode an SVG string as a base64 data URI for inline markdown embedding.
+ * Raycast's markdown renderer accepts `data:image/svg+xml;base64,...` in
+ * `![alt](…)` image tags, and unlike `file://` URLs it requires no disk writes
+ * and is unaffected by spaces or trust-policy restrictions on the path. */
+function svgToDataUri(svg: string): string {
+  return `data:image/svg+xml;base64,${Buffer.from(svg, "utf8").toString("base64")}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,10 +64,10 @@ function hashStr(s: string): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Generate a line chart SVG and return a markdown image string using a
- * file:// URL written to environment.supportPath.
+ * Generate a line chart SVG and return a markdown image string using an
+ * inline base64 data URI.
  *
- * Returns `![chart](file:///...)`.
+ * Returns `![chart](data:image/svg+xml;base64,...)`.
  */
 export function lineChart(
   values: Array<number | undefined | null>,
@@ -226,9 +190,7 @@ export function lineChart(
   ${labelElements.join("\n  ")}
 </svg>`;
 
-  const hash = hashStr(svg);
-  const url = svgToFileUrl(svg, `line_${hash}.svg`);
-  return `![chart](${url})`;
+  return `![chart](${svgToDataUri(svg)})`;
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +199,7 @@ export function lineChart(
 
 /**
  * Generate a horizontal stacked bar chart for sleep stages and return a
- * markdown image string using a file:// URL.
+ * markdown image string using an inline base64 data URI.
  */
 export function stagesBar(
   stages: { deep: number; rem: number; light: number },
@@ -332,9 +294,7 @@ export function stagesBar(
   ${legendEls.join("\n  ")}
 </svg>`;
 
-  const hash = hashStr(svg);
-  const url = svgToFileUrl(svg, `stages_${hash}.svg`);
-  return `![stages](${url})`;
+  return `![stages](${svgToDataUri(svg)})`;
 }
 
 // ---------------------------------------------------------------------------
