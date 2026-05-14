@@ -63,7 +63,9 @@ export interface DailyMetrics {
 export type DailyMetricsRange = DailyMetrics[];
 
 // Human-readable list of metrics the user can ask AI tools about.
-export type MetricName =
+// Constrained to keyof DailyMetrics so a typo is a compile error.
+export type MetricName = keyof Pick<
+  DailyMetrics,
   | "sleep_score"
   | "total_sleep"
   | "rem_sleep"
@@ -79,7 +81,8 @@ export type MetricName =
   | "spo2"
   | "vo2_max"
   | "steps"
-  | "active_minutes";
+  | "active_minutes"
+>;
 
 export const METRIC_LABELS: Record<MetricName, string> = {
   sleep_score: "Sleep Score",
