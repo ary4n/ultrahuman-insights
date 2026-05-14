@@ -1,6 +1,5 @@
 import {
   List,
-  Detail,
   ActionPanel,
   Action,
   Icon,
@@ -9,44 +8,94 @@ import {
 import { useCallback, useMemo } from "react";
 import { getRange, clearRange } from "./lib/cache";
 import { DailyMetricsRange, METRIC_LABELS, MetricName } from "./lib/types";
-import { fmt, lastNDaysEpoch, sparkline } from "./lib/format";
+import { fmt, formatDuration, lastNDaysEpoch, sparkline } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
+import { insightFor, deltaVsAverage, Insight } from "./lib/insights";
 
-function seriesFor(
-  range: DailyMetricsRange,
-  metric: MetricName,
-): Array<number | undefined> {
-  return [...range]
-    .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
-    .map((d) => d[metric]);
+// Duration-based metrics
+const DURATION_METRICS = new Set<MetricName>([
+  "total_sleep",
+  "rem_sleep",
+  "deep_sleep",
+  "light_sleep",
+]);
+
+const METRIC_UNITS: Partial<Record<MetricName, string>> = {
+  hrv: "ms",
+  night_rhr: "bpm",
+  hr: "bpm",
+  temp: "°C",
+  sleep_efficiency: "%",
+  spo2: "%",
+};
+
+function formatValue(metric: MetricName, value: number | undefined): string {
+  if (value == null) return "—";
+  if (DURATION_METRICS.has(metric)) return formatDuration(value);
+  const unit = METRIC_UNITS[metric];
+  return fmt(value, unit ?? "");
 }
 
-function MetricDetail({
-  range,
-  metric,
-}: {
-  range: DailyMetricsRange;
-  metric: MetricName;
-}) {
-  const sorted = [...range].sort((a, b) =>
-    (a.date ?? "").localeCompare(b.date ?? ""),
-  );
-  const values = seriesFor(range, metric);
-  const rows = sorted
-    .map((d, i) => `| ${d.date ?? "?"} | ${fmt(values[i])} |`)
-    .join("\n");
-  const markdown = [
-    `# ${METRIC_LABELS[metric]} — Last 7 Days`,
-    "",
-    "```",
-    sparkline(values),
-    "```",
-    "",
-    "| Date | Value |",
-    "|---|---|",
-    rows,
-  ].join("\n");
-  return <Detail markdown={markdown} />;
+function trendSummary(
+  metric: MetricName,
+  values: Array<number | undefined>,
+  todayValue: number | undefined,
+): string {
+  const delta = deltaVsAverage(todayValue, values);
+  if (!delta) return "";
+  const { pct } = delta;
+  if (Math.abs(pct) <= 1) return "";
+  const dir = pct > 0 ? "up" : "down";
+  return `${METRIC_LABELS[metric]} is trending ${dir} ${Math.abs(pct).toFixed(0)}% over the last 7 days.`;
+}
+
+function trendMarkdown(
+  metric: MetricName,
+  values: Array<number | undefined>,
+  dates: Array<string | undefined>,
+  insight: Insight,
+): string {
+  const todayValue = values[values.length - 1];
+  const lines: string[] = [];
+
+  // Big heading: today's value
+  lines.push(`# ${formatValue(metric, todayValue)}`);
+  lines.push(`## ${METRIC_LABELS[metric]}`);
+  lines.push("");
+
+  // Status + context
+  if (insight.status !== "neutral" && insight.context) {
+    const statusLine = insight.label
+      ? `**${insight.label}** — ${insight.context}`
+      : insight.context;
+    lines.push(statusLine);
+    lines.push("");
+  }
+
+  // Sparkline
+  const spark = sparkline(values);
+  if (spark) {
+    lines.push("```");
+    lines.push(spark);
+    lines.push("```");
+    lines.push("");
+  }
+
+  // Table
+  lines.push("| Date | Value |");
+  lines.push("|---|---|");
+  dates.forEach((date, i) => {
+    lines.push(`| ${date ?? "?"} | ${formatValue(metric, values[i])} |`);
+  });
+
+  // Trend summary
+  const summary = trendSummary(metric, values, todayValue);
+  if (summary) {
+    lines.push("");
+    lines.push(`*${summary}*`);
+  }
+
+  return lines.join("\n");
 }
 
 export default function Trends() {
@@ -78,10 +127,15 @@ export default function Trends() {
     );
   }
 
+  // Sort range chronologically; today is the last element
+  const sorted = data
+    ? [...data].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
+    : [];
+
   const metrics = Object.keys(METRIC_LABELS) as MetricName[];
 
   return (
-    <List isLoading={loading} navigationTitle="7-Day Trends">
+    <List isLoading={loading} isShowingDetail navigationTitle="7-Day Trends">
       {error && (
         <List.Section title="⚠️ Refresh failed">
           <List.Item title={error.message.slice(0, 80)} />
@@ -95,24 +149,30 @@ export default function Trends() {
       {data && (
         <List.Section title="Metrics">
           {metrics
-            .filter((m) => data.some((d) => d[m] != null))
+            .filter((m) => sorted.some((d) => d[m] != null))
             .map((m) => {
-              const values = seriesFor(data, m);
+              const values = sorted.map((d) => d[m]);
+              const dates = sorted.map((d) => d.date);
+              const todayValue = values[values.length - 1];
+              const insight = insightFor(m, todayValue, values);
+
               return (
                 <List.Item
                   key={m}
                   title={METRIC_LABELS[m]}
+                  icon={{ source: Icon.Circle, tintColor: insight.color }}
                   accessories={[{ text: sparkline(values) }]}
+                  detail={
+                    <List.Item.Detail
+                      markdown={trendMarkdown(m, values, dates, insight)}
+                    />
+                  }
                   actions={
                     <ActionPanel>
-                      <Action.Push
-                        title="See Daily Values"
-                        target={<MetricDetail range={data} metric={m} />}
-                        icon={Icon.LineChart}
-                      />
                       <Action
                         title="Refresh"
                         icon={Icon.ArrowClockwise}
+                        shortcut={{ modifiers: ["cmd"], key: "r" }}
                         onAction={refresh}
                       />
                     </ActionPanel>
