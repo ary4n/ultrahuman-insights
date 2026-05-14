@@ -15,7 +15,21 @@ export type StatusVariant =
 
 interface Props {
   variant: StatusVariant;
+  /**
+   * For `refresh-failed`: the error message text (used as the List.Item title
+   * in banner mode, or as the Detail body). For other variants this is ignored.
+   */
   message?: string;
+  /**
+   * Override the List.Item title in banner variants (`refresh-failed`, `stale`).
+   * When omitted the title from `variantProps` is used.
+   */
+  itemTitle?: string;
+  /**
+   * Override the List.Section title in banner variants (`refresh-failed`, `stale`).
+   * When omitted the default section heading is used.
+   */
+  sectionTitle?: string;
   onRefresh?: () => void;
 }
 
@@ -86,7 +100,7 @@ function buildActions(variant: StatusVariant, onRefresh?: () => void) {
 
 /** Use inside List-based commands (today, trends, recovery). */
 export function ListStatus(props: Props) {
-  const { variant, message, onRefresh } = props;
+  const { variant, message, itemTitle, sectionTitle, onRefresh } = props;
 
   if (variant === "missing-token") {
     const { title, description } = variantProps(variant, message);
@@ -104,15 +118,17 @@ export function ListStatus(props: Props) {
 
   if (variant === "stale" || variant === "refresh-failed") {
     const { title, description, icon } = variantProps(variant, message);
+    // When a caller supplies `itemTitle` the custom text is self-descriptive;
+    // suppress the generic description subtitle to avoid duplication.
+    const resolvedTitle = itemTitle ?? title;
+    const resolvedSubtitle = itemTitle ? undefined : description;
+    const defaultSectionTitle =
+      variant === "stale" ? "⚠️ Showing cached data" : "❌ Refresh failed";
     return (
-      <List.Section
-        title={
-          variant === "stale" ? "⚠️ Showing cached data" : "❌ Refresh failed"
-        }
-      >
+      <List.Section title={sectionTitle ?? defaultSectionTitle}>
         <List.Item
-          title={title}
-          subtitle={description}
+          title={resolvedTitle}
+          subtitle={resolvedSubtitle}
           icon={icon}
           actions={buildActions(variant, onRefresh)}
         />

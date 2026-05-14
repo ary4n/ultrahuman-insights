@@ -13,6 +13,7 @@ import { useMetrics } from "./lib/use-metrics";
 import { insightFor, deltaVsAverage } from "./lib/insights";
 import { metricIcon } from "./lib/icons";
 import { lineChart, colorToHex } from "./lib/charts";
+import { ListStatus } from "./lib/status-view";
 
 interface IndexDef {
   metric: MetricName;
@@ -134,24 +135,7 @@ export default function Recovery() {
   }, [range, reload]);
 
   if (missingToken) {
-    return (
-      <List>
-        <List.EmptyView
-          title="Set your Ultrahuman API token"
-          description="Open extension preferences and paste your Partner API token."
-          icon={Icon.Key}
-          actions={
-            <ActionPanel>
-              <Action
-                title="Open Preferences"
-                icon={Icon.Cog}
-                onAction={openExtensionPreferences}
-              />
-            </ActionPanel>
-          }
-        />
-      </List>
-    );
+    return <ListStatus variant="missing-token" />;
   }
 
   const sorted = useMemo(
@@ -176,20 +160,18 @@ export default function Recovery() {
       navigationTitle="Recovery & Movement"
     >
       {error && (
-        <List.Section title="❌ Refresh failed">
-          <List.Item
-            title={error.message.slice(0, 80)}
-            icon={Icon.ExclamationMark}
-          />
-        </List.Section>
+        <ListStatus
+          variant="refresh-failed"
+          itemTitle={error.message.slice(0, 80)}
+          onRefresh={refresh}
+        />
       )}
       {stale && (
-        <List.Section title="⚠️ Showing cached data">
-          <List.Item
-            title="Network unreachable — data may be outdated"
-            icon={Icon.Clock}
-          />
-        </List.Section>
+        <ListStatus
+          variant="stale"
+          itemTitle="Network unreachable — data may be outdated"
+          onRefresh={refresh}
+        />
       )}
       <List.Section title="Indices">
         {INDICES.map((def) => {

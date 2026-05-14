@@ -18,6 +18,7 @@ import { useMetrics } from "./lib/use-metrics";
 import { insightFor, deltaVsAverage, Insight } from "./lib/insights";
 import { metricIcon } from "./lib/icons";
 import { lineChart, colorToHex } from "./lib/charts";
+import { ListStatus } from "./lib/status-view";
 
 function trendSummary(
   metric: MetricName,
@@ -104,24 +105,7 @@ export default function Trends() {
   }, [range, reload]);
 
   if (missingToken) {
-    return (
-      <List>
-        <List.EmptyView
-          title="Set your Ultrahuman API token"
-          description="Open extension preferences and paste your Partner API token."
-          icon={Icon.Key}
-          actions={
-            <ActionPanel>
-              <Action
-                title="Open Preferences"
-                icon={Icon.Cog}
-                onAction={openExtensionPreferences}
-              />
-            </ActionPanel>
-          }
-        />
-      </List>
-    );
+    return <ListStatus variant="missing-token" />;
   }
 
   const sorted = useMemo(
@@ -137,46 +121,19 @@ export default function Trends() {
   return (
     <List isLoading={loading} isShowingDetail navigationTitle="7-Day Trends">
       {error && (
-        <List.Section title="❌ Refresh failed">
-          <List.Item
-            title={error.message.slice(0, 80)}
-            icon={Icon.ExclamationMark}
-            actions={
-              <ActionPanel>
-                <Action
-                  title="Retry"
-                  icon={Icon.ArrowClockwise}
-                  shortcut={{ modifiers: ["cmd"], key: "r" }}
-                  onAction={refresh}
-                />
-                <Action
-                  title="Open Preferences"
-                  icon={Icon.Cog}
-                  shortcut={{ modifiers: ["cmd"], key: "," }}
-                  onAction={openExtensionPreferences}
-                />
-              </ActionPanel>
-            }
-          />
-        </List.Section>
+        <ListStatus
+          variant="refresh-failed"
+          itemTitle={error.message.slice(0, 80)}
+          onRefresh={refresh}
+        />
       )}
       {stale && (
-        <List.Section title="⚠️ Cached — network unreachable">
-          <List.Item
-            title="Showing last successful fetch"
-            icon={Icon.Clock}
-            actions={
-              <ActionPanel>
-                <Action
-                  title="Retry"
-                  icon={Icon.ArrowClockwise}
-                  shortcut={{ modifiers: ["cmd"], key: "r" }}
-                  onAction={refresh}
-                />
-              </ActionPanel>
-            }
-          />
-        </List.Section>
+        <ListStatus
+          variant="stale"
+          sectionTitle="⚠️ Cached — network unreachable"
+          itemTitle="Showing last successful fetch"
+          onRefresh={refresh}
+        />
       )}
       {data && (
         <List.Section title="Metrics">

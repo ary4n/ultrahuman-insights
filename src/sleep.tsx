@@ -17,6 +17,7 @@ import {
 import { useMetrics } from "./lib/use-metrics";
 import { insightFor, deltaVsAverage } from "./lib/insights";
 import { lineChart, stagesBar, colorToHex } from "./lib/charts";
+import { DetailStatus } from "./lib/status-view";
 
 function markdownFor(
   range: DailyMetricsRange,
@@ -183,20 +184,7 @@ export default function Sleep() {
       : null;
 
   if (missingToken) {
-    return (
-      <Detail
-        markdown="# Set your Ultrahuman API token\n\nOpen extension preferences and paste your Partner API token."
-        actions={
-          <ActionPanel>
-            <Action
-              title="Open Preferences"
-              icon={Icon.Key}
-              onAction={openExtensionPreferences}
-            />
-          </ActionPanel>
-        }
-      />
-    );
+    return <DetailStatus variant="missing-token" />;
   }
 
   const markdown = data

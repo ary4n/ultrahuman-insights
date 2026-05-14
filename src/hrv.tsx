@@ -12,6 +12,7 @@ import { fmt, lastNDaysEpoch, todayDateKey } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
 import { insightFor, deltaVsAverage } from "./lib/insights";
 import { lineChart, colorToHex } from "./lib/charts";
+import { DetailStatus } from "./lib/status-view";
 
 function trendDeltaLine(
   value: number | undefined,
@@ -201,20 +202,7 @@ export default function Hrv() {
     todayEntry?.hrv != null ? `HRV: ${todayEntry.hrv} ms` : null;
 
   if (missingToken) {
-    return (
-      <Detail
-        markdown="# Set your Ultrahuman API token\n\nOpen extension preferences and paste your Partner API token."
-        actions={
-          <ActionPanel>
-            <Action
-              title="Open Preferences"
-              icon={Icon.Key}
-              onAction={openExtensionPreferences}
-            />
-          </ActionPanel>
-        }
-      />
-    );
+    return <DetailStatus variant="missing-token" />;
   }
 
   const markdown = data
