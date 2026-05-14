@@ -4,7 +4,10 @@ import { getApiToken } from "./prefs";
 const BASE_URL = "https://partner.ultrahuman.com/api/v1/partner";
 
 export class UltrahumanError extends Error {
-  constructor(public status: number, public body: string) {
+  constructor(
+    public status: number,
+    public body: string,
+  ) {
     super(`Ultrahuman API ${status}: ${body.slice(0, 200)}`);
     this.name = "UltrahumanError";
   }
@@ -17,7 +20,10 @@ export class MissingTokenError extends Error {
   }
 }
 
-async function call<T>(path: string, params: Record<string, string | number>): Promise<T> {
+async function call<T>(
+  path: string,
+  params: Record<string, string | number>,
+): Promise<T> {
   const token = getApiToken();
   if (!token) throw new MissingTokenError();
 
@@ -48,7 +54,10 @@ export function fetchDay(date: string): Promise<DailyMetrics> {
 }
 
 /** Fetch metrics across an epoch range. Ultrahuman caps the window at 7 days. */
-export function fetchRange(startEpoch: number, endEpoch: number): Promise<DailyMetricsRange> {
+export function fetchRange(
+  startEpoch: number,
+  endEpoch: number,
+): Promise<DailyMetricsRange> {
   return call<DailyMetricsRange>("/daily_metrics", {
     start_epoch: startEpoch,
     end_epoch: endEpoch,

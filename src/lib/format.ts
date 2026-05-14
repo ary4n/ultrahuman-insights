@@ -52,7 +52,10 @@ export function lastNDaysEpoch(n: number): { start: number; end: number } {
   const start = new Date();
   start.setDate(start.getDate() - (n - 1));
   start.setHours(0, 0, 0, 0);
-  return { start: Math.floor(start.getTime() / 1000), end: Math.floor(end.getTime() / 1000) };
+  return {
+    start: Math.floor(start.getTime() / 1000),
+    end: Math.floor(end.getTime() / 1000),
+  };
 }
 
 /** ASCII sparkline for a series of numbers (last N values). Missing values render as space. */
@@ -64,6 +67,10 @@ export function sparkline(values: Array<number | undefined | null>): string {
   const max = Math.max(...present);
   const range = max - min || 1;
   return values
-    .map((v) => (typeof v === "number" ? ticks[Math.min(7, Math.floor(((v - min) / range) * 7))] : " "))
+    .map((v) =>
+      typeof v === "number"
+        ? ticks[Math.min(7, Math.floor(((v - min) / range) * 7))]
+        : " ",
+    )
     .join("");
 }

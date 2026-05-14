@@ -16,7 +16,10 @@ export interface Memoized<T> {
   stale: boolean;
 }
 
-async function memoize<T>(key: string, fetcher: () => Promise<T>): Promise<Memoized<T>> {
+async function memoize<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+): Promise<Memoized<T>> {
   const raw = cache.get(key);
   const cached: Entry<T> | null = raw ? (JSON.parse(raw) as Entry<T>) : null;
 
@@ -38,8 +41,13 @@ export function getDay(date: string): Promise<Memoized<DailyMetrics>> {
   return memoize(`daily:${date}`, () => fetchDay(date));
 }
 
-export function getRange(startEpoch: number, endEpoch: number): Promise<Memoized<DailyMetricsRange>> {
-  return memoize(`range:${startEpoch}:${endEpoch}`, () => fetchRange(startEpoch, endEpoch));
+export function getRange(
+  startEpoch: number,
+  endEpoch: number,
+): Promise<Memoized<DailyMetricsRange>> {
+  return memoize(`range:${startEpoch}:${endEpoch}`, () =>
+    fetchRange(startEpoch, endEpoch),
+  );
 }
 
 /** Force a refresh for one day on next read. */
