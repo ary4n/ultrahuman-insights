@@ -5,7 +5,7 @@ import {
   Icon,
   openExtensionPreferences,
 } from "@raycast/api";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { getRange, clearRange } from "./lib/cache";
 import { DailyMetricsRange, METRIC_LABELS, MetricName } from "./lib/types";
 import { formatDuration, fmt, lastNDaysEpoch, sparkline } from "./lib/format";
@@ -131,7 +131,7 @@ function detailMarkdown(
 }
 
 export default function Today() {
-  const range = useCallback(() => lastNDaysEpoch(7), [])();
+  const range = useMemo(() => lastNDaysEpoch(7), []);
   const fetcher = useCallback(() => getRange(range.start, range.end), [range]);
   const { data, stale, loading, missingToken, error, reload } =
     useMetrics<DailyMetricsRange>(fetcher);
