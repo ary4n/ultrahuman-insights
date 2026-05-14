@@ -1,5 +1,5 @@
 import {
-  Detail,
+  List,
   ActionPanel,
   Action,
   Icon,
@@ -10,13 +10,13 @@ import { getRange, clearRange } from "./lib/cache";
 import { DailyMetricsRange, MetricName } from "./lib/types";
 import { fmt, lastNDaysEpoch, todayDateKey } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
-import { insightFor, deltaVsAverage, Insight } from "./lib/insights";
+import { insightFor, deltaVsAverage } from "./lib/insights";
+import { metricIcon } from "./lib/icons";
 import { lineChart, colorToHex } from "./lib/charts";
 
 interface IndexDef {
   metric: MetricName;
   label: string;
-  unit?: string;
 }
 
 const INDICES: IndexDef[] = [
@@ -25,18 +25,18 @@ const INDICES: IndexDef[] = [
   { metric: "sleep_score", label: "Sleep Index" },
 ];
 
-function indexSection(
+function indexDetailMarkdown(
   def: IndexDef,
   value: number | undefined,
   series: Array<number | undefined>,
   shortLabels: string[],
 ): string {
-  const insight: Insight = insightFor(def.metric, value, series);
+  const insight = insightFor(def.metric, value, series);
   const lines: string[] = [];
 
-  const displayVal =
-    value != null ? `${def.unit ? fmt(value, def.unit) : fmt(value)}` : "—";
-  lines.push(`## ${insight.emoji} ${def.label}: ${displayVal}`);
+  const displayVal = value != null ? fmt(value) : "—";
+  lines.push(`# ${insight.emoji} ${displayVal}`);
+  lines.push(`## ${def.label}`);
   lines.push("");
 
   if (insight.status !== "neutral" && insight.context) {
@@ -64,7 +64,7 @@ function indexSection(
     );
   }
 
-  // Mini line chart (600×80) when ≥3 valid data points
+  // Mini line chart (≥3 valid data points)
   const validCount = series.filter((v) => v != null).length;
   if (validCount >= 3) {
     const hexColor = colorToHex(insight.color);
@@ -82,35 +82,43 @@ function indexSection(
   return lines.join("\n");
 }
 
-function markdownFor(
-  range: DailyMetricsRange,
-  stale: boolean,
-  error: Error | null,
-): string {
-  const sorted = [...range].sort((a, b) =>
-    (a.date ?? "").localeCompare(b.date ?? ""),
+function IndexMetadata({
+  value,
+  series,
+}: {
+  value: number | undefined;
+  series: Array<number | undefined>;
+}) {
+  // 7-day avg excluding today (last element)
+  const avg =
+    series.length > 1
+      ? (() => {
+          const base = series
+            .slice(0, -1)
+            .filter((v): v is number => v != null);
+          return base.length > 0
+            ? base.reduce((a, b) => a + b, 0) / base.length
+            : null;
+        })()
+      : null;
+
+  const delta = value != null && avg != null ? Math.round(value - avg) : null;
+  const deltaStr =
+    delta != null ? (delta > 0 ? `+${delta}` : String(delta)) : "—";
+
+  return (
+    <List.Item.Detail.Metadata>
+      <List.Item.Detail.Metadata.Label
+        title="Score"
+        text={value != null ? String(value) : "—"}
+      />
+      <List.Item.Detail.Metadata.Label
+        title="7-day avg"
+        text={avg != null ? String(Math.round(avg)) : "—"}
+      />
+      <List.Item.Detail.Metadata.Label title="Today vs avg" text={deltaStr} />
+    </List.Item.Detail.Metadata>
   );
-  const d = sorted[sorted.length - 1];
-
-  const error_note = error ? `\n> ❌ Refresh failed: ${error.message}\n` : "";
-  const stale_note = stale ? "\n> ⚠️ Cached — network unreachable\n" : "";
-
-  const shortLabels = sorted.map((r) => {
-    if (!r.date) return "";
-    const date = new Date(r.date + "T12:00:00");
-    return date.toLocaleDateString("en-US", { weekday: "short" });
-  });
-
-  const lines: string[] = ["# Recovery & Movement", error_note, stale_note, ""];
-
-  for (const def of INDICES) {
-    const value = d?.[def.metric];
-    const series = sorted.map((r) => r[def.metric]);
-    lines.push(indexSection(def, value, series, shortLabels));
-    lines.push("");
-  }
-
-  return lines.join("\n");
 }
 
 export default function Recovery() {
@@ -125,35 +133,115 @@ export default function Recovery() {
     await reload();
   }, [range, reload]);
 
-  const markdown = missingToken
-    ? "# Set your Ultrahuman API token\n\nOpen preferences and paste your Partner API token."
-    : data
-      ? markdownFor(data, stale, error)
-      : loading
-        ? "Loading…"
-        : "No data yet.";
+  if (missingToken) {
+    return (
+      <List>
+        <List.EmptyView
+          title="Set your Ultrahuman API token"
+          description="Open extension preferences and paste your Partner API token."
+          icon={Icon.Key}
+          actions={
+            <ActionPanel>
+              <Action
+                title="Open Preferences"
+                icon={Icon.Cog}
+                onAction={openExtensionPreferences}
+              />
+            </ActionPanel>
+          }
+        />
+      </List>
+    );
+  }
+
+  const sorted = useMemo(
+    () =>
+      data
+        ? [...data].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
+        : [],
+    [data],
+  );
+  const todayEntry = sorted[sorted.length - 1] ?? null;
+
+  const shortLabels = sorted.map((r) => {
+    if (!r.date) return "";
+    const date = new Date(r.date + "T12:00:00");
+    return date.toLocaleDateString("en-US", { weekday: "short" });
+  });
 
   return (
-    <Detail
+    <List
       isLoading={loading}
-      markdown={markdown}
-      actions={
-        <ActionPanel>
-          {missingToken ? (
-            <Action
-              title="Open Preferences"
-              onAction={openExtensionPreferences}
+      isShowingDetail={!loading && !!data}
+      navigationTitle="Recovery & Movement"
+    >
+      {error && (
+        <List.Section title="❌ Refresh failed">
+          <List.Item
+            title={error.message.slice(0, 80)}
+            icon={Icon.ExclamationMark}
+          />
+        </List.Section>
+      )}
+      {stale && (
+        <List.Section title="⚠️ Showing cached data">
+          <List.Item
+            title="Network unreachable — data may be outdated"
+            icon={Icon.Clock}
+          />
+        </List.Section>
+      )}
+      <List.Section title="Indices">
+        {INDICES.map((def) => {
+          const value = todayEntry?.[def.metric];
+          const series = sorted.map((r) => r[def.metric]);
+          const insight = insightFor(def.metric, value, series);
+          const copyValue = value != null ? `${def.label}: ${value}` : null;
+
+          return (
+            <List.Item
+              key={def.metric}
+              title={def.label}
+              icon={metricIcon(def.metric, insight.status)}
+              accessories={[{ text: value != null ? String(value) : "—" }]}
+              detail={
+                <List.Item.Detail
+                  markdown={indexDetailMarkdown(
+                    def,
+                    value,
+                    series,
+                    shortLabels,
+                  )}
+                  metadata={<IndexMetadata value={value} series={series} />}
+                />
+              }
+              actions={
+                <ActionPanel>
+                  <Action
+                    title="Refresh"
+                    icon={Icon.ArrowClockwise}
+                    shortcut={{ modifiers: ["cmd"], key: "r" }}
+                    onAction={refresh}
+                  />
+                  <Action
+                    title="Open Preferences"
+                    icon={Icon.Cog}
+                    shortcut={{ modifiers: ["cmd"], key: "," }}
+                    onAction={openExtensionPreferences}
+                  />
+                  {copyValue && (
+                    <Action.CopyToClipboard
+                      title={`Copy ${def.label}`}
+                      content={copyValue}
+                      shortcut={{ modifiers: ["cmd"], key: "c" }}
+                    />
+                  )}
+                </ActionPanel>
+              }
             />
-          ) : (
-            <Action
-              title="Refresh"
-              icon={Icon.ArrowClockwise}
-              shortcut={{ modifiers: ["cmd"], key: "r" }}
-              onAction={refresh}
-            />
-          )}
-        </ActionPanel>
-      }
-    />
+          );
+        })}
+      </List.Section>
+    </List>
   );
 }
