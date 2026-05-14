@@ -1,20 +1,40 @@
-import { List, Detail, ActionPanel, Action, Icon, openExtensionPreferences } from "@raycast/api";
+import {
+  List,
+  Detail,
+  ActionPanel,
+  Action,
+  Icon,
+  openExtensionPreferences,
+} from "@raycast/api";
 import { useCallback } from "react";
 import { getRange } from "./lib/cache";
 import { DailyMetricsRange, METRIC_LABELS, MetricName } from "./lib/types";
 import { fmt, lastNDaysEpoch, sparkline } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
 
-function seriesFor(range: DailyMetricsRange, metric: MetricName): Array<number | undefined> {
+function seriesFor(
+  range: DailyMetricsRange,
+  metric: MetricName,
+): Array<number | undefined> {
   return [...range]
     .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
     .map((d) => d[metric]);
 }
 
-function MetricDetail({ range, metric }: { range: DailyMetricsRange; metric: MetricName }) {
-  const sorted = [...range].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
+function MetricDetail({
+  range,
+  metric,
+}: {
+  range: DailyMetricsRange;
+  metric: MetricName;
+}) {
+  const sorted = [...range].sort((a, b) =>
+    (a.date ?? "").localeCompare(b.date ?? ""),
+  );
   const values = seriesFor(range, metric);
-  const rows = sorted.map((d, i) => `| ${d.date ?? "?"} | ${fmt(values[i])} |`).join("\n");
+  const rows = sorted
+    .map((d, i) => `| ${d.date ?? "?"} | ${fmt(values[i])} |`)
+    .join("\n");
   const markdown = [
     `# ${METRIC_LABELS[metric]} — Last 7 Days`,
     "",
@@ -34,7 +54,8 @@ export default function Trends() {
     const { start, end } = lastNDaysEpoch(7);
     return getRange(start, end);
   }, []);
-  const { data, stale, loading, missingToken, error, reload } = useMetrics<DailyMetricsRange>(fetcher);
+  const { data, stale, loading, missingToken, error, reload } =
+    useMetrics<DailyMetricsRange>(fetcher);
 
   if (missingToken) {
     return (
@@ -43,7 +64,10 @@ export default function Trends() {
           title="Set your Ultrahuman API token"
           actions={
             <ActionPanel>
-              <Action title="Open Preferences" onAction={openExtensionPreferences} />
+              <Action
+                title="Open Preferences"
+                onAction={openExtensionPreferences}
+              />
             </ActionPanel>
           }
         />
@@ -83,7 +107,11 @@ export default function Trends() {
                         target={<MetricDetail range={data} metric={m} />}
                         icon={Icon.LineChart}
                       />
-                      <Action title="Refresh" icon={Icon.ArrowClockwise} onAction={() => reload()} />
+                      <Action
+                        title="Refresh"
+                        icon={Icon.ArrowClockwise}
+                        onAction={() => reload()}
+                      />
                     </ActionPanel>
                   }
                 />

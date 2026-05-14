@@ -1,15 +1,30 @@
-import { Detail, ActionPanel, Action, Icon, openExtensionPreferences } from "@raycast/api";
+import {
+  Detail,
+  ActionPanel,
+  Action,
+  Icon,
+  openExtensionPreferences,
+} from "@raycast/api";
 import { useCallback } from "react";
 import { getDay, clearDay } from "./lib/cache";
 import { DailyMetrics } from "./lib/types";
 import { fmt, scoreEmoji, today } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
 
-function row(emoji: string, label: string, value: number | undefined, blurb: string): string {
+function row(
+  emoji: string,
+  label: string,
+  value: number | undefined,
+  blurb: string,
+): string {
   return `### ${emoji} ${label}\n**${fmt(value)}** — ${blurb}\n`;
 }
 
-function markdownFor(d: DailyMetrics, stale: boolean, error: Error | null): string {
+function markdownFor(
+  d: DailyMetrics,
+  stale: boolean,
+  error: Error | null,
+): string {
   const error_note = error ? `\n> ❌ Refresh failed: ${error.message}\n` : "";
   const stale_note = stale ? "\n> ⚠️ Cached — network unreachable\n" : "";
   return [
@@ -40,7 +55,8 @@ function markdownFor(d: DailyMetrics, stale: boolean, error: Error | null): stri
 
 export default function Recovery() {
   const fetcher = useCallback(() => getDay(today()), []);
-  const { data, stale, loading, missingToken, error, reload } = useMetrics<DailyMetrics>(fetcher);
+  const { data, stale, loading, missingToken, error, reload } =
+    useMetrics<DailyMetrics>(fetcher);
 
   const markdown = missingToken
     ? "# Set your Ultrahuman API token\n\nOpen preferences and paste your Partner API token."
@@ -57,7 +73,10 @@ export default function Recovery() {
       actions={
         <ActionPanel>
           {missingToken ? (
-            <Action title="Open Preferences" onAction={openExtensionPreferences} />
+            <Action
+              title="Open Preferences"
+              onAction={openExtensionPreferences}
+            />
           ) : (
             <Action
               title="Refresh"

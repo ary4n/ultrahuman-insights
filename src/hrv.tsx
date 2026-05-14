@@ -1,12 +1,24 @@
-import { Detail, ActionPanel, Action, Icon, openExtensionPreferences } from "@raycast/api";
+import {
+  Detail,
+  ActionPanel,
+  Action,
+  Icon,
+  openExtensionPreferences,
+} from "@raycast/api";
 import { useCallback } from "react";
 import { getRange } from "./lib/cache";
 import { DailyMetricsRange } from "./lib/types";
 import { fmt, lastNDaysEpoch, sparkline } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
 
-function markdownFor(range: DailyMetricsRange, stale: boolean, error: Error | null): string {
-  const sorted = [...range].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
+function markdownFor(
+  range: DailyMetricsRange,
+  stale: boolean,
+  error: Error | null,
+): string {
+  const sorted = [...range].sort((a, b) =>
+    (a.date ?? "").localeCompare(b.date ?? ""),
+  );
   const todayEntry = sorted[sorted.length - 1];
   const hrvSeries = sorted.map((d) => d.hrv);
   const rhrSeries = sorted.map((d) => d.night_rhr);
@@ -30,7 +42,9 @@ function markdownFor(range: DailyMetricsRange, stale: boolean, error: Error | nu
     "",
     "| Date | HRV (ms) | Night RHR (bpm) |",
     "|---|---|---|",
-    ...sorted.map((d) => `| ${d.date ?? "?"} | ${fmt(d.hrv)} | ${fmt(d.night_rhr)} |`),
+    ...sorted.map(
+      (d) => `| ${d.date ?? "?"} | ${fmt(d.hrv)} | ${fmt(d.night_rhr)} |`,
+    ),
   ];
   return lines.join("\n");
 }
@@ -40,7 +54,8 @@ export default function Hrv() {
     const { start, end } = lastNDaysEpoch(7);
     return getRange(start, end);
   }, []);
-  const { data, stale, loading, missingToken, error, reload } = useMetrics<DailyMetricsRange>(fetcher);
+  const { data, stale, loading, missingToken, error, reload } =
+    useMetrics<DailyMetricsRange>(fetcher);
 
   const markdown = missingToken
     ? "# Set your Ultrahuman API token\n\nOpen preferences and paste your Partner API token."
@@ -57,7 +72,10 @@ export default function Hrv() {
       actions={
         <ActionPanel>
           {missingToken ? (
-            <Action title="Open Preferences" onAction={openExtensionPreferences} />
+            <Action
+              title="Open Preferences"
+              onAction={openExtensionPreferences}
+            />
           ) : (
             <Action
               title="Refresh"

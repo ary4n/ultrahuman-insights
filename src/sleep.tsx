@@ -1,4 +1,10 @@
-import { Detail, ActionPanel, Action, Icon, openExtensionPreferences } from "@raycast/api";
+import {
+  Detail,
+  ActionPanel,
+  Action,
+  Icon,
+  openExtensionPreferences,
+} from "@raycast/api";
 import { useCallback } from "react";
 import { getDay, clearDay } from "./lib/cache";
 import { DailyMetrics } from "./lib/types";
@@ -14,14 +20,23 @@ function stagesBar(d: DailyMetrics): string {
   const total = stages.reduce((a, s) => a + s.mins, 0);
   if (total === 0) return "_(no stage data)_";
   const width = 40;
-  const bar = stages.map((s) => s.char.repeat(Math.round((s.mins / total) * width))).join("");
-  const legend = stages.map((s) => `${s.char} ${s.label} ${formatDuration(s.mins)}`).join("  ·  ");
+  const bar = stages
+    .map((s) => s.char.repeat(Math.round((s.mins / total) * width)))
+    .join("");
+  const legend = stages
+    .map((s) => `${s.char} ${s.label} ${formatDuration(s.mins)}`)
+    .join("  ·  ");
   return "```\n" + bar + "\n```\n\n" + legend;
 }
 
-function markdownFor(d: DailyMetrics, stale: boolean, error: Error | null): string {
+function markdownFor(
+  d: DailyMetrics,
+  stale: boolean,
+  error: Error | null,
+): string {
   const score = d.sleep_score;
-  const header = score != null ? `# ${scoreEmoji(score)} Sleep Score: ${score}` : "# Sleep";
+  const header =
+    score != null ? `# ${scoreEmoji(score)} Sleep Score: ${score}` : "# Sleep";
   const error_note = error ? `\n> ❌ Refresh failed: ${error.message}\n` : "";
   const stale_note = stale ? "\n> ⚠️ Cached — network unreachable\n" : "";
   return [
@@ -50,7 +65,8 @@ function markdownFor(d: DailyMetrics, stale: boolean, error: Error | null): stri
 
 export default function Sleep() {
   const fetcher = useCallback(() => getDay(today()), []);
-  const { data, stale, loading, missingToken, error, reload } = useMetrics<DailyMetrics>(fetcher);
+  const { data, stale, loading, missingToken, error, reload } =
+    useMetrics<DailyMetrics>(fetcher);
 
   const markdown = missingToken
     ? "# Set your Ultrahuman API token\n\nOpen preferences and paste your Partner API token."
@@ -67,7 +83,10 @@ export default function Sleep() {
       actions={
         <ActionPanel>
           {missingToken ? (
-            <Action title="Open Preferences" onAction={openExtensionPreferences} />
+            <Action
+              title="Open Preferences"
+              onAction={openExtensionPreferences}
+            />
           ) : (
             <Action
               title="Refresh"
