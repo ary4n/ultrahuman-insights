@@ -1,14 +1,17 @@
 import {
   MenuBarExtra,
+  Icon,
+  Color,
   openExtensionPreferences,
   launchCommand,
   LaunchType,
 } from "@raycast/api";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { getDay, clearDay } from "./lib/cache";
-import { today, formatDuration, scoreEmoji, fmt } from "./lib/format";
+import { today, formatDuration, fmt } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
 import { cleanupOldCharts } from "./lib/charts";
+import { insightFor, statusColor } from "./lib/insights";
 
 export default function MenuBar() {
   const dateKey = today();
@@ -22,7 +25,10 @@ export default function MenuBar() {
 
   if (missingToken) {
     return (
-      <MenuBarExtra icon="⚙️" title="Ultrahuman">
+      <MenuBarExtra
+        icon={{ source: Icon.Cog, tintColor: Color.SecondaryText }}
+        title="Ultrahuman"
+      >
         <MenuBarExtra.Item
           title="Set API Token"
           onAction={openExtensionPreferences}
@@ -33,11 +39,20 @@ export default function MenuBar() {
 
   const score = data?.sleep_score;
   const hasError = error != null;
-  const baseTitle = score == null ? "—" : `${scoreEmoji(score)} ${score}`;
-  const title = hasError ? `⚠️ ${baseTitle}` : baseTitle;
+
+  // Native Moon icon tinted by status
+  const moonIcon = useMemo(() => {
+    if (hasError) {
+      return { source: Icon.Moon, tintColor: Color.Red };
+    }
+    const status = insightFor("sleep_score", score).status;
+    return { source: Icon.Moon, tintColor: statusColor(status) };
+  }, [score, hasError]);
+
+  const title = hasError ? "⚠️" : score != null ? String(score) : "—";
 
   return (
-    <MenuBarExtra icon="⚪" title={title} isLoading={loading}>
+    <MenuBarExtra icon={moonIcon} title={title} isLoading={loading}>
       {hasError && (
         <MenuBarExtra.Item
           title="Refresh failed"
@@ -65,6 +80,10 @@ export default function MenuBar() {
         <MenuBarExtra.Item
           title="Efficiency"
           subtitle={fmt(data?.sleep_efficiency, "%")}
+        />
+        <MenuBarExtra.Item
+          title="Restorative"
+          subtitle={fmt(data?.restorative_sleep, "%")}
         />
       </MenuBarExtra.Section>
       <MenuBarExtra.Section title="Recovery">
