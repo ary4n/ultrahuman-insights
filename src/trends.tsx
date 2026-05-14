@@ -9,8 +9,7 @@ import { useCallback, useMemo } from "react";
 import { getRange, clearRange } from "./lib/cache";
 import { DailyMetricsRange, METRIC_LABELS, MetricName } from "./lib/types";
 import {
-  fmt,
-  formatDuration,
+  formatMetricValue,
   lastNDaysEpoch,
   sparkline,
   todayDateKey,
@@ -19,30 +18,6 @@ import { useMetrics } from "./lib/use-metrics";
 import { insightFor, deltaVsAverage, Insight } from "./lib/insights";
 import { metricIcon } from "./lib/icons";
 import { lineChart, colorToHex } from "./lib/charts";
-
-// Duration-based metrics
-const DURATION_METRICS = new Set<MetricName>([
-  "total_sleep",
-  "rem_sleep",
-  "deep_sleep",
-  "light_sleep",
-]);
-
-const METRIC_UNITS: Partial<Record<MetricName, string>> = {
-  hrv: "ms",
-  night_rhr: "bpm",
-  hr: "bpm",
-  temp: "°C",
-  sleep_efficiency: "%",
-  spo2: "%",
-};
-
-function formatValue(metric: MetricName, value: number | undefined): string {
-  if (value == null) return "—";
-  if (DURATION_METRICS.has(metric)) return formatDuration(value);
-  const unit = METRIC_UNITS[metric];
-  return fmt(value, unit ?? "");
-}
 
 function trendSummary(
   metric: MetricName,
@@ -66,12 +41,10 @@ function trendMarkdown(
   const todayValue = values[values.length - 1];
   const lines: string[] = [];
 
-  // Big heading: today's value
-  lines.push(`# ${formatValue(metric, todayValue)}`);
+  lines.push(`# ${formatMetricValue(metric, todayValue)}`);
   lines.push(`## ${METRIC_LABELS[metric]}`);
   lines.push("");
 
-  // Status + context
   if (insight.status !== "neutral" && insight.context) {
     const statusLine = insight.label
       ? `**${insight.label}** — ${insight.context}`
@@ -80,7 +53,6 @@ function trendMarkdown(
     lines.push("");
   }
 
-  // SVG line chart when ≥3 valid points, otherwise unicode sparkline
   const validCount = values.filter((v) => v != null).length;
   if (validCount >= 3) {
     const hexColor = colorToHex(insight.color);
@@ -104,14 +76,12 @@ function trendMarkdown(
     }
   }
 
-  // Table
   lines.push("| Date | Value |");
   lines.push("|---|---|");
   dates.forEach((date, i) => {
-    lines.push(`| ${date ?? "?"} | ${formatValue(metric, values[i])} |`);
+    lines.push(`| ${date ?? "?"} | ${formatMetricValue(metric, values[i])} |`);
   });
 
-  // Trend summary
   const summary = trendSummary(metric, values, todayValue);
   if (summary) {
     lines.push("");
@@ -138,10 +108,13 @@ export default function Trends() {
       <List>
         <List.EmptyView
           title="Set your Ultrahuman API token"
+          description="Open extension preferences and paste your Partner API token."
+          icon={Icon.Key}
           actions={
             <ActionPanel>
               <Action
                 title="Open Preferences"
+                icon={Icon.Cog}
                 onAction={openExtensionPreferences}
               />
             </ActionPanel>
@@ -151,7 +124,6 @@ export default function Trends() {
     );
   }
 
-  // Sort range chronologically; today is the last element
   const sorted = useMemo(
     () =>
       data
@@ -165,13 +137,45 @@ export default function Trends() {
   return (
     <List isLoading={loading} isShowingDetail navigationTitle="7-Day Trends">
       {error && (
-        <List.Section title="⚠️ Refresh failed">
-          <List.Item title={error.message.slice(0, 80)} />
+        <List.Section title="❌ Refresh failed">
+          <List.Item
+            title={error.message.slice(0, 80)}
+            icon={Icon.ExclamationMark}
+            actions={
+              <ActionPanel>
+                <Action
+                  title="Retry"
+                  icon={Icon.ArrowClockwise}
+                  shortcut={{ modifiers: ["cmd"], key: "r" }}
+                  onAction={refresh}
+                />
+                <Action
+                  title="Open Preferences"
+                  icon={Icon.Cog}
+                  shortcut={{ modifiers: ["cmd"], key: "," }}
+                  onAction={openExtensionPreferences}
+                />
+              </ActionPanel>
+            }
+          />
         </List.Section>
       )}
       {stale && (
         <List.Section title="⚠️ Cached — network unreachable">
-          <List.Item title="Showing last successful fetch" />
+          <List.Item
+            title="Showing last successful fetch"
+            icon={Icon.Clock}
+            actions={
+              <ActionPanel>
+                <Action
+                  title="Retry"
+                  icon={Icon.ArrowClockwise}
+                  shortcut={{ modifiers: ["cmd"], key: "r" }}
+                  onAction={refresh}
+                />
+              </ActionPanel>
+            }
+          />
         </List.Section>
       )}
       {data && (
@@ -183,6 +187,8 @@ export default function Trends() {
               const dates = sorted.map((d) => d.date);
               const todayValue = values[values.length - 1];
               const insight = insightFor(m, todayValue, values);
+              const formattedValue = formatMetricValue(m, todayValue);
+              const copyText = `${METRIC_LABELS[m]}: ${formattedValue}`;
 
               return (
                 <List.Item
@@ -202,6 +208,17 @@ export default function Trends() {
                         icon={Icon.ArrowClockwise}
                         shortcut={{ modifiers: ["cmd"], key: "r" }}
                         onAction={refresh}
+                      />
+                      <Action
+                        title="Open Preferences"
+                        icon={Icon.Cog}
+                        shortcut={{ modifiers: ["cmd"], key: "," }}
+                        onAction={openExtensionPreferences}
+                      />
+                      <Action.CopyToClipboard
+                        title={`Copy ${METRIC_LABELS[m]}`}
+                        content={copyText}
+                        shortcut={{ modifiers: ["cmd"], key: "c" }}
                       />
                     </ActionPanel>
                   }

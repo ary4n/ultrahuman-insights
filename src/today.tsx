@@ -9,8 +9,7 @@ import { useCallback, useMemo } from "react";
 import { getRange, clearRange } from "./lib/cache";
 import { DailyMetricsRange, METRIC_LABELS, MetricName } from "./lib/types";
 import {
-  formatDuration,
-  fmt,
+  formatMetricValue,
   lastNDaysEpoch,
   sparkline,
   todayDateKey,
@@ -19,31 +18,6 @@ import { useMetrics } from "./lib/use-metrics";
 import { insightFor, deltaVsAverage, Insight } from "./lib/insights";
 import { metricIcon } from "./lib/icons";
 import { lineChart, colorToHex } from "./lib/charts";
-
-// Duration-based metrics (display as "Xh Ym")
-const DURATION_METRICS = new Set<MetricName>([
-  "total_sleep",
-  "rem_sleep",
-  "deep_sleep",
-  "light_sleep",
-]);
-
-// Unit map for non-duration metrics
-const METRIC_UNITS: Partial<Record<MetricName, string>> = {
-  hrv: "ms",
-  night_rhr: "bpm",
-  hr: "bpm",
-  temp: "°C",
-  sleep_efficiency: "%",
-  spo2: "%",
-};
-
-function formatValue(metric: MetricName, value: number | undefined): string {
-  if (value == null) return "—";
-  if (DURATION_METRICS.has(metric)) return formatDuration(value);
-  const unit = METRIC_UNITS[metric];
-  return fmt(value, unit ?? "");
-}
 
 function trendLine(
   metric: MetricName,
@@ -59,10 +33,8 @@ function trendLine(
   const up = d > 0;
   const arrow = up ? (bigMove ? "⏫" : "⬆️") : bigMove ? "⏬" : "⬇️";
   const sign = d > 0 ? "+" : "";
-  const deltaStr = DURATION_METRICS.has(metric)
-    ? formatDuration(Math.abs(d))
-    : `${sign}${Number.isInteger(d) ? d : d.toFixed(1)}`;
-  const avgStr = DURATION_METRICS.has(metric) ? formatDuration(avg) : fmt(avg);
+  const deltaStr = `${sign}${Number.isInteger(d) ? d : d.toFixed(1)}`;
+  const avgStr = formatMetricValue(metric, avg);
 
   return `${arrow} **${deltaStr}** vs 7-day average (${avgStr})`;
 }
@@ -74,7 +46,7 @@ function detailMarkdown(
   dates: Array<string | undefined>,
   insight: Insight,
 ): string {
-  const heading = formatValue(metric, value);
+  const heading = formatMetricValue(metric, value);
   const lines: string[] = [];
 
   lines.push(`# ${heading}`);
@@ -103,7 +75,6 @@ function detailMarkdown(
   const validCount = series.filter((v) => v != null).length;
   if (validCount >= 3) {
     const hexColor = colorToHex(insight.color);
-    // Short date labels like "Mon", "Tue" from YYYY-MM-DD
     const shortLabels = dates.map((d) => {
       if (!d) return "";
       const date = new Date(d + "T12:00:00");
@@ -115,7 +86,6 @@ function detailMarkdown(
       lines.push(chart);
     }
   } else {
-    // Fall back to unicode sparkline for <3 data points
     const spark = sparkline(series);
     if (spark) {
       lines.push("");
@@ -146,10 +116,12 @@ export default function Today() {
         <List.EmptyView
           title="Set your Ultrahuman API token"
           description="Open extension preferences and paste your Partner API token."
+          icon={Icon.Key}
           actions={
             <ActionPanel>
               <Action
                 title="Open Preferences"
+                icon={Icon.Cog}
                 onAction={openExtensionPreferences}
               />
             </ActionPanel>
@@ -159,7 +131,6 @@ export default function Today() {
     );
   }
 
-  // Today is the last element of the sorted range
   const sorted = useMemo(
     () =>
       data
@@ -178,16 +149,48 @@ export default function Today() {
     <List
       isLoading={loading}
       isShowingDetail={!loading && !!data}
-      navigationTitle={`Today's Health`}
+      navigationTitle="Today's Health"
     >
       {error && (
-        <List.Section title="⚠️ Refresh failed">
-          <List.Item title={error.message.slice(0, 80)} />
+        <List.Section title="❌ Refresh failed">
+          <List.Item
+            title={error.message.slice(0, 80)}
+            icon={Icon.ExclamationMark}
+            actions={
+              <ActionPanel>
+                <Action
+                  title="Retry"
+                  icon={Icon.ArrowClockwise}
+                  shortcut={{ modifiers: ["cmd"], key: "r" }}
+                  onAction={refresh}
+                />
+                <Action
+                  title="Open Preferences"
+                  icon={Icon.Cog}
+                  shortcut={{ modifiers: ["cmd"], key: "," }}
+                  onAction={openExtensionPreferences}
+                />
+              </ActionPanel>
+            }
+          />
         </List.Section>
       )}
       {stale && (
         <List.Section title="⚠️ Cached — network unreachable">
-          <List.Item title="Showing last successful fetch" />
+          <List.Item
+            title="Showing last successful fetch"
+            icon={Icon.Clock}
+            actions={
+              <ActionPanel>
+                <Action
+                  title="Retry"
+                  icon={Icon.ArrowClockwise}
+                  shortcut={{ modifiers: ["cmd"], key: "r" }}
+                  onAction={refresh}
+                />
+              </ActionPanel>
+            }
+          />
         </List.Section>
       )}
       <List.Section title="Metrics">
@@ -196,13 +199,15 @@ export default function Today() {
           const series = sorted.map((d) => d[metric]);
           const dates = sorted.map((d) => d.date);
           const insight = insightFor(metric, value, series);
+          const formattedValue = formatMetricValue(metric, value);
+          const copyText = `${METRIC_LABELS[metric]}: ${formattedValue}`;
 
           return (
             <List.Item
               key={metric}
               title={METRIC_LABELS[metric]}
               icon={metricIcon(metric, insight.status)}
-              accessories={[{ text: formatValue(metric, value) }]}
+              accessories={[{ text: formattedValue }]}
               detail={
                 <List.Item.Detail
                   markdown={detailMarkdown(
@@ -222,6 +227,17 @@ export default function Today() {
                     shortcut={{ modifiers: ["cmd"], key: "r" }}
                     onAction={refresh}
                   />
+                  <Action
+                    title="Open Preferences"
+                    icon={Icon.Cog}
+                    shortcut={{ modifiers: ["cmd"], key: "," }}
+                    onAction={openExtensionPreferences}
+                  />
+                  <Action.CopyToClipboard
+                    title={`Copy ${METRIC_LABELS[metric]}`}
+                    content={copyText}
+                    shortcut={{ modifiers: ["cmd"], key: "c" }}
+                  />
                 </ActionPanel>
               }
             />
@@ -231,6 +247,17 @@ export default function Today() {
           <List.Item
             title="No data yet today"
             subtitle="Charge and sync your Ring, then refresh."
+            icon={Icon.Cloud}
+            actions={
+              <ActionPanel>
+                <Action
+                  title="Refresh"
+                  icon={Icon.ArrowClockwise}
+                  shortcut={{ modifiers: ["cmd"], key: "r" }}
+                  onAction={refresh}
+                />
+              </ActionPanel>
+            }
           />
         )}
       </List.Section>
