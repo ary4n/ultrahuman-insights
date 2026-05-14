@@ -8,8 +8,28 @@ import {
 import { useCallback, useMemo } from "react";
 import { getRange, clearRange } from "./lib/cache";
 import { DailyMetricsRange } from "./lib/types";
-import { fmt, lastNDaysEpoch, sparkline } from "./lib/format";
+import { fmt, lastNDaysEpoch } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
+import { insightFor, deltaVsAverage } from "./lib/insights";
+import { lineChart, colorToHex } from "./lib/charts";
+
+function trendDeltaLine(
+  label: string,
+  value: number | undefined,
+  unit: string,
+  series: Array<number | undefined>,
+): string {
+  if (value == null) return "";
+  const delta = deltaVsAverage(value, series);
+  if (!delta || Math.abs(delta.pct) <= 1)
+    return `Today: **${fmt(value, unit)}**`;
+  const up = delta.delta > 0;
+  const bigMove = Math.abs(delta.pct) > 5;
+  const arrow = up ? (bigMove ? "⏫" : "⬆️") : bigMove ? "⏬" : "⬇️";
+  const sign = delta.delta > 0 ? "+" : "";
+  const deltaStr = `${sign}${Number.isInteger(delta.delta) ? delta.delta : delta.delta.toFixed(1)}`;
+  return `Today: **${fmt(value, unit)}** · ${arrow} ${deltaStr} vs 7-day average`;
+}
 
 function markdownFor(
   range: DailyMetricsRange,
@@ -22,30 +42,80 @@ function markdownFor(
   const todayEntry = sorted[sorted.length - 1];
   const hrvSeries = sorted.map((d) => d.hrv);
   const rhrSeries = sorted.map((d) => d.night_rhr);
+
   const error_note = error ? `\n> ❌ Refresh failed: ${error.message}\n` : "";
   const stale_note = stale ? "\n> ⚠️ Cached — network unreachable\n" : "";
 
-  const lines: string[] = [
-    "# HRV & Heart Rate",
-    error_note,
-    stale_note,
-    `**Today's HRV:** ${fmt(todayEntry?.hrv, "ms")} · **Night RHR:** ${fmt(todayEntry?.night_rhr, "bpm")}`,
-    `**HR Drop:** ${fmt(todayEntry?.hr_drop, "bpm")} · **Resting HR:** ${fmt(todayEntry?.hr, "bpm")}`,
-    "",
-    "## 7-Day Trend",
-    "```",
-    `HRV  ${sparkline(hrvSeries)}`,
-    `RHR  ${sparkline(rhrSeries)}`,
-    "```",
-    "",
-    "## Daily Values",
-    "",
-    "| Date | HRV (ms) | Night RHR (bpm) |",
-    "|---|---|---|",
-    ...sorted.map(
-      (d) => `| ${d.date ?? "?"} | ${fmt(d.hrv)} | ${fmt(d.night_rhr)} |`,
-    ),
-  ];
+  const lines: string[] = [];
+
+  lines.push("# HRV & Heart Rate");
+  lines.push(error_note);
+  lines.push(stale_note);
+
+  // HRV headline insight
+  const hrvInsight = insightFor("hrv", todayEntry?.hrv, hrvSeries);
+  if (hrvInsight.status !== "neutral" && hrvInsight.context) {
+    const statusLine = hrvInsight.label
+      ? `**${hrvInsight.label}** — ${hrvInsight.context}`
+      : hrvInsight.context;
+    lines.push(statusLine);
+  }
+  if (hrvInsight.recommendation) {
+    lines.push("");
+    lines.push(`**Recommend:** ${hrvInsight.recommendation}`);
+  }
+  lines.push("");
+
+  // HRV summary line with delta
+  lines.push(trendDeltaLine("HRV", todayEntry?.hrv, "ms", hrvSeries));
+  lines.push(
+    `**Night RHR:** ${fmt(todayEntry?.night_rhr, "bpm")} · **HR Drop:** ${fmt(todayEntry?.hr_drop, "bpm")} · **Resting HR:** ${fmt(todayEntry?.hr, "bpm")}`,
+  );
+
+  const shortLabels = sorted.map((r) => {
+    if (!r.date) return "";
+    const date = new Date(r.date + "T12:00:00");
+    return date.toLocaleDateString("en-US", { weekday: "short" });
+  });
+
+  // HRV line chart
+  const validHrv = hrvSeries.filter((v) => v != null).length;
+  if (validHrv >= 3) {
+    lines.push("");
+    lines.push("## HRV (7 Days)");
+    const hrvHex = colorToHex(hrvInsight.color);
+    const chart = lineChart(hrvSeries, { color: hrvHex, labels: shortLabels });
+    if (chart) lines.push(chart);
+  }
+
+  // Night RHR line chart
+  const validRhr = rhrSeries.filter((v) => v != null).length;
+  if (validRhr >= 3) {
+    lines.push("");
+    lines.push("## Night RHR (7 Days)");
+    const rhrInsight = insightFor(
+      "night_rhr",
+      todayEntry?.night_rhr,
+      rhrSeries,
+    );
+    const rhrHex = colorToHex(rhrInsight.color);
+    const rhrChart = lineChart(rhrSeries, {
+      color: rhrHex,
+      labels: shortLabels,
+    });
+    if (rhrChart) lines.push(rhrChart);
+  }
+
+  // Daily values table
+  lines.push("");
+  lines.push("## Daily Values");
+  lines.push("");
+  lines.push("| Date | HRV (ms) | Night RHR (bpm) |");
+  lines.push("|---|---|---|");
+  sorted.forEach((d) => {
+    lines.push(`| ${d.date ?? "?"} | ${fmt(d.hrv)} | ${fmt(d.night_rhr)} |`);
+  });
+
   return lines.join("\n");
 }
 
