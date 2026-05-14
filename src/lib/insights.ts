@@ -62,13 +62,31 @@ export function deltaVsAverage(
 }
 
 // ---------------------------------------------------------------------------
+// Shared score thresholds
+// ---------------------------------------------------------------------------
+
+export const SCORE_THRESHOLDS = {
+  excellent: 85,
+  good: 70,
+  fair: 50,
+} as const;
+
+function scoreStatus(value: number): Status {
+  if (value >= SCORE_THRESHOLDS.excellent) return "excellent";
+  if (value >= SCORE_THRESHOLDS.good) return "good";
+  if (value >= SCORE_THRESHOLDS.fair) return "fair";
+  return "poor";
+}
+
+// ---------------------------------------------------------------------------
 // Per-metric insight factory
 // ---------------------------------------------------------------------------
 
 function sleepScore(value: number): Insight {
-  if (value >= 85) {
+  const status = scoreStatus(value);
+  if (status === "excellent") {
     return {
-      status: "excellent",
+      status,
       label: "Excellent",
       context:
         "Well-rested. Your body got the restorative sleep it needs to perform.",
@@ -76,21 +94,20 @@ function sleepScore(value: number): Insight {
       emoji: "🟢",
     };
   }
-  if (value >= 70) {
+  if (status === "good") {
     return {
-      status: "good",
+      status,
       label: "Good",
       context: "Solid night. Your sleep quality is in the healthy range.",
       color: Color.Green,
       emoji: "🟢",
     };
   }
-  if (value >= 50) {
+  if (status === "fair") {
     return {
-      status: "fair",
+      status,
       label: "Below optimal",
-      context:
-        "Sleep quality was suboptimal — below the 70+ target. Some recovery may be incomplete.",
+      context: `Sleep quality was suboptimal — below the ${SCORE_THRESHOLDS.good}+ target. Some recovery may be incomplete.`,
       recommendation:
         "Try going to bed 30–60 min earlier tonight and limit screen time before sleep.",
       color: Color.Yellow,
@@ -98,10 +115,9 @@ function sleepScore(value: number): Insight {
     };
   }
   return {
-    status: "poor",
+    status,
     label: "Poor",
-    context:
-      "Well below the 70+ optimal range. Today is a recovery day — keep intensity low.",
+    context: `Well below the ${SCORE_THRESHOLDS.good}+ optimal range. Today is a recovery day — keep intensity low.`,
     recommendation:
       "Prioritize sleep tonight. Consider a light activity day and avoid caffeine after noon.",
     color: Color.Red,
@@ -110,9 +126,10 @@ function sleepScore(value: number): Insight {
 }
 
 function recoveryIndex(value: number): Insight {
-  if (value >= 85) {
+  const status = scoreStatus(value);
+  if (status === "excellent") {
     return {
-      status: "excellent",
+      status,
       label: "Excellent",
       context:
         "Your body has fully recovered and is primed for high-intensity effort.",
@@ -120,18 +137,18 @@ function recoveryIndex(value: number): Insight {
       emoji: "🟢",
     };
   }
-  if (value >= 70) {
+  if (status === "good") {
     return {
-      status: "good",
+      status,
       label: "Good",
       context: "Good recovery. You're ready for a normal training day.",
       color: Color.Green,
       emoji: "🟢",
     };
   }
-  if (value >= 50) {
+  if (status === "fair") {
     return {
-      status: "fair",
+      status,
       label: "Moderate",
       context: "Partial recovery — your body hasn't fully bounced back yet.",
       recommendation:
@@ -141,7 +158,7 @@ function recoveryIndex(value: number): Insight {
     };
   }
   return {
-    status: "poor",
+    status,
     label: "Poor",
     context: "Low recovery. Your body is under stress and needs rest.",
     recommendation:
@@ -152,9 +169,10 @@ function recoveryIndex(value: number): Insight {
 }
 
 function movementIndex(value: number): Insight {
-  if (value >= 85) {
+  const status = scoreStatus(value);
+  if (status === "excellent") {
     return {
-      status: "excellent",
+      status,
       label: "Excellent",
       context:
         "You hit your movement goals. Great job staying active throughout the day.",
@@ -162,18 +180,18 @@ function movementIndex(value: number): Insight {
       emoji: "🟢",
     };
   }
-  if (value >= 70) {
+  if (status === "good") {
     return {
-      status: "good",
+      status,
       label: "Good",
       context: "Good movement day — above the baseline target.",
       color: Color.Green,
       emoji: "🟢",
     };
   }
-  if (value >= 50) {
+  if (status === "fair") {
     return {
-      status: "fair",
+      status,
       label: "Below target",
       context:
         "Movement was lower than ideal. Long sitting periods can affect metabolism and recovery.",
@@ -183,7 +201,7 @@ function movementIndex(value: number): Insight {
     };
   }
   return {
-    status: "poor",
+    status,
     label: "Low",
     context:
       "Very little movement recorded. Sedentary days can compound fatigue and slow recovery.",

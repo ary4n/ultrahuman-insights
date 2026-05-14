@@ -45,14 +45,6 @@ function formatValue(metric: MetricName, value: number | undefined): string {
   return fmt(value, unit ?? "");
 }
 
-/** Build the big heading value string for the markdown detail */
-function headingValue(metric: MetricName, value: number | undefined): string {
-  if (value == null) return "—";
-  if (DURATION_METRICS.has(metric)) return formatDuration(value);
-  const unit = METRIC_UNITS[metric];
-  return fmt(value, unit ?? "");
-}
-
 function trendLine(
   metric: MetricName,
   value: number | undefined,
@@ -82,7 +74,7 @@ function detailMarkdown(
   dates: Array<string | undefined>,
   insight: Insight,
 ): string {
-  const heading = headingValue(metric, value);
+  const heading = formatValue(metric, value);
   const lines: string[] = [];
 
   lines.push(`# ${heading}`);
