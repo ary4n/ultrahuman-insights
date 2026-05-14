@@ -11,6 +11,8 @@ import { DailyMetricsRange, METRIC_LABELS, MetricName } from "./lib/types";
 import { fmt, formatDuration, lastNDaysEpoch, sparkline } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
 import { insightFor, deltaVsAverage, Insight } from "./lib/insights";
+import { metricIcon } from "./lib/icons";
+import { lineChart, colorToHex } from "./lib/charts";
 
 // Duration-based metrics
 const DURATION_METRICS = new Set<MetricName>([
@@ -72,13 +74,28 @@ function trendMarkdown(
     lines.push("");
   }
 
-  // Sparkline
-  const spark = sparkline(values);
-  if (spark) {
-    lines.push("```");
-    lines.push(spark);
-    lines.push("```");
-    lines.push("");
+  // SVG line chart when ≥3 valid points, otherwise unicode sparkline
+  const validCount = values.filter((v) => v != null).length;
+  if (validCount >= 3) {
+    const hexColor = colorToHex(insight.color);
+    const shortLabels = dates.map((d) => {
+      if (!d) return "";
+      const date = new Date(d + "T12:00:00");
+      return date.toLocaleDateString("en-US", { weekday: "short" });
+    });
+    const chart = lineChart(values, { color: hexColor, labels: shortLabels });
+    if (chart) {
+      lines.push(chart);
+      lines.push("");
+    }
+  } else {
+    const spark = sparkline(values);
+    if (spark) {
+      lines.push("```");
+      lines.push(spark);
+      lines.push("```");
+      lines.push("");
+    }
   }
 
   // Table
@@ -160,7 +177,7 @@ export default function Trends() {
                 <List.Item
                   key={m}
                   title={METRIC_LABELS[m]}
-                  icon={{ source: Icon.Circle, tintColor: insight.color }}
+                  icon={metricIcon(m, insight.status)}
                   accessories={[{ text: sparkline(values) }]}
                   detail={
                     <List.Item.Detail

@@ -11,6 +11,8 @@ import { DailyMetricsRange, METRIC_LABELS, MetricName } from "./lib/types";
 import { formatDuration, fmt, lastNDaysEpoch, sparkline } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
 import { insightFor, deltaVsAverage, Insight } from "./lib/insights";
+import { metricIcon } from "./lib/icons";
+import { lineChart, colorToHex } from "./lib/charts";
 
 // Duration-based metrics (display as "Xh Ym")
 const DURATION_METRICS = new Set<MetricName>([
@@ -71,6 +73,7 @@ function detailMarkdown(
   metric: MetricName,
   value: number | undefined,
   series: Array<number | undefined>,
+  dates: Array<string | undefined>,
   insight: Insight,
 ): string {
   const heading = headingValue(metric, value);
@@ -96,6 +99,32 @@ function detailMarkdown(
   if (trend) {
     lines.push("");
     lines.push(trend);
+  }
+
+  // SVG line chart — only when ≥3 valid data points
+  const validCount = series.filter((v) => v != null).length;
+  if (validCount >= 3) {
+    const hexColor = colorToHex(insight.color);
+    // Short date labels like "Mon", "Tue" from YYYY-MM-DD
+    const shortLabels = dates.map((d) => {
+      if (!d) return "";
+      const date = new Date(d + "T12:00:00");
+      return date.toLocaleDateString("en-US", { weekday: "short" });
+    });
+    const chart = lineChart(series, { color: hexColor, labels: shortLabels });
+    if (chart) {
+      lines.push("");
+      lines.push(chart);
+    }
+  } else {
+    // Fall back to unicode sparkline for <3 data points
+    const spark = sparkline(series);
+    if (spark) {
+      lines.push("");
+      lines.push("```");
+      lines.push(spark);
+      lines.push("```");
+    }
   }
 
   return lines.join("\n");
@@ -162,28 +191,24 @@ export default function Today() {
         {availableMetrics.map((metric) => {
           const value = todayData?.[metric];
           const series = sorted.map((d) => d[metric]);
+          const dates = sorted.map((d) => d.date);
           const insight = insightFor(metric, value, series);
-          const spark = sparkline(series);
 
           return (
             <List.Item
               key={metric}
               title={METRIC_LABELS[metric]}
-              icon={{ source: Icon.Circle, tintColor: insight.color }}
+              icon={metricIcon(metric, insight.status)}
               accessories={[{ text: formatValue(metric, value) }]}
               detail={
                 <List.Item.Detail
-                  markdown={detailMarkdown(metric, value, series, insight)}
-                  metadata={
-                    spark ? (
-                      <List.Item.Detail.Metadata>
-                        <List.Item.Detail.Metadata.Label
-                          title="7-Day Trend"
-                          text={spark}
-                        />
-                      </List.Item.Detail.Metadata>
-                    ) : undefined
-                  }
+                  markdown={detailMarkdown(
+                    metric,
+                    value,
+                    series,
+                    dates,
+                    insight,
+                  )}
                 />
               }
               actions={
