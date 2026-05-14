@@ -4,35 +4,15 @@ import {
   launchCommand,
   LaunchType,
 } from "@raycast/api";
-import { useEffect, useState } from "react";
+import { useCallback } from "react";
 import { getDay, clearDay } from "./lib/cache";
 import { today, formatDuration, scoreEmoji, fmt } from "./lib/format";
-import { DailyMetrics } from "./lib/types";
-import { MissingTokenError } from "./lib/ultrahuman";
+import { useMetrics } from "./lib/use-metrics";
 
 export default function MenuBar() {
-  const [data, setData] = useState<DailyMetrics | null>(null);
-  const [stale, setStale] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [missingToken, setMissingToken] = useState(false);
-
-  async function load() {
-    setLoading(true);
-    try {
-      const r = await getDay(today());
-      setData(r.data);
-      setStale(r.stale);
-      setMissingToken(false);
-    } catch (e) {
-      if (e instanceof MissingTokenError) setMissingToken(true);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
+  const fetcher = useCallback(() => getDay(today()), []);
+  const { data, stale, loading, missingToken, error, reload } =
+    useMetrics(fetcher);
 
   if (missingToken) {
     return (
@@ -46,10 +26,18 @@ export default function MenuBar() {
   }
 
   const score = data?.sleep_score;
-  const title = score == null ? "—" : `${scoreEmoji(score)} ${score}`;
+  const hasError = error != null;
+  const baseTitle = score == null ? "—" : `${scoreEmoji(score)} ${score}`;
+  const title = hasError ? `⚠️ ${baseTitle}` : baseTitle;
 
   return (
     <MenuBarExtra icon="⚪" title={title} isLoading={loading}>
+      {hasError && (
+        <MenuBarExtra.Item
+          title="Refresh failed"
+          subtitle={error.message.slice(0, 80)}
+        />
+      )}
       {stale && <MenuBarExtra.Item title="⚠️ Showing cached data" />}
       <MenuBarExtra.Section title="Sleep">
         <MenuBarExtra.Item
@@ -99,7 +87,7 @@ export default function MenuBar() {
           title="Refresh Now"
           onAction={async () => {
             clearDay(today());
-            await load();
+            await reload();
           }}
         />
       </MenuBarExtra.Section>
