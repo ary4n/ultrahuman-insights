@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Memoized } from "./cache";
-import { MissingTokenError } from "./ultrahuman";
+import { MissingTokenError, UltrahumanError } from "./ultrahuman";
 
 interface State<T> {
   data: T | null;
@@ -41,7 +41,10 @@ export function useMetrics<T>(
         error: null,
       });
     } catch (e) {
-      if (e instanceof MissingTokenError) {
+      if (
+        e instanceof MissingTokenError ||
+        (e instanceof UltrahumanError && e.status === 401)
+      ) {
         setState({
           data: null,
           stale: false,
