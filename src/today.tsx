@@ -2,117 +2,115 @@ import {
   List,
   ActionPanel,
   Action,
-  Color,
   Icon,
   openExtensionPreferences,
 } from "@raycast/api";
 import { useCallback } from "react";
-import { getDay, clearDay } from "./lib/cache";
-import { DailyMetrics } from "./lib/types";
-import { formatDuration, fmt, scoreColor, today } from "./lib/format";
+import { getRange, clearRange } from "./lib/cache";
+import { DailyMetricsRange, METRIC_LABELS, MetricName } from "./lib/types";
+import { formatDuration, fmt, lastNDaysEpoch, sparkline } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
+import { insightFor, deltaVsAverage, Insight } from "./lib/insights";
 
-interface Row {
-  id: string;
-  title: string;
-  value: string;
-  color?: Color;
+// Duration-based metrics (display as "Xh Ym")
+const DURATION_METRICS = new Set<MetricName>([
+  "total_sleep",
+  "rem_sleep",
+  "deep_sleep",
+  "light_sleep",
+]);
+
+// Unit map for non-duration metrics
+const METRIC_UNITS: Partial<Record<MetricName, string>> = {
+  hrv: "ms",
+  night_rhr: "bpm",
+  hr: "bpm",
+  temp: "°C",
+  sleep_efficiency: "%",
+  spo2: "%",
+};
+
+function formatValue(metric: MetricName, value: number | undefined): string {
+  if (value == null) return "—";
+  if (DURATION_METRICS.has(metric)) return formatDuration(value);
+  const unit = METRIC_UNITS[metric];
+  return fmt(value, unit ?? "");
 }
 
-function rowsFor(d: DailyMetrics): Row[] {
-  const rows: Row[] = [];
-  if (d.sleep_score != null)
-    rows.push({
-      id: "sleep_score",
-      title: "Sleep Score",
-      value: String(d.sleep_score),
-      color: scoreColor(d.sleep_score),
-    });
-  if (d.total_sleep != null)
-    rows.push({
-      id: "total_sleep",
-      title: "Total Sleep",
-      value: formatDuration(d.total_sleep),
-    });
-  if (d.sleep_efficiency != null)
-    rows.push({
-      id: "sleep_efficiency",
-      title: "Sleep Efficiency",
-      value: fmt(d.sleep_efficiency, "%"),
-    });
-  if (d.rem_sleep != null)
-    rows.push({
-      id: "rem_sleep",
-      title: "REM Sleep",
-      value: formatDuration(d.rem_sleep),
-    });
-  if (d.deep_sleep != null)
-    rows.push({
-      id: "deep_sleep",
-      title: "Deep Sleep",
-      value: formatDuration(d.deep_sleep),
-    });
-  if (d.light_sleep != null)
-    rows.push({
-      id: "light_sleep",
-      title: "Light Sleep",
-      value: formatDuration(d.light_sleep),
-    });
-  if (d.hrv != null)
-    rows.push({ id: "hrv", title: "HRV", value: fmt(d.hrv, "ms") });
-  if (d.night_rhr != null)
-    rows.push({
-      id: "night_rhr",
-      title: "Night RHR",
-      value: fmt(d.night_rhr, "bpm"),
-    });
-  if (d.hr != null)
-    rows.push({ id: "hr", title: "Heart Rate", value: fmt(d.hr, "bpm") });
-  if (d.recovery_index != null)
-    rows.push({
-      id: "recovery_index",
-      title: "Recovery Index",
-      value: String(d.recovery_index),
-      color: scoreColor(d.recovery_index),
-    });
-  if (d.movement_index != null)
-    rows.push({
-      id: "movement_index",
-      title: "Movement Index",
-      value: String(d.movement_index),
-      color: scoreColor(d.movement_index),
-    });
-  if (d.temp != null)
-    rows.push({
-      id: "temp",
-      title: "Body Temperature",
-      value: fmt(d.temp, "°C"),
-    });
-  if (d.spo2 != null)
-    rows.push({ id: "spo2", title: "SpO₂", value: fmt(d.spo2, "%") });
-  if (d.vo2_max != null)
-    rows.push({ id: "vo2_max", title: "VO₂ Max", value: fmt(d.vo2_max) });
-  if (d.steps != null)
-    rows.push({ id: "steps", title: "Steps", value: fmt(d.steps) });
-  if (d.active_minutes != null)
-    rows.push({
-      id: "active_minutes",
-      title: "Active Minutes",
-      value: fmt(d.active_minutes, "min"),
-    });
-  if (d.avg_glucose != null)
-    rows.push({
-      id: "avg_glucose",
-      title: "Average Glucose",
-      value: fmt(d.avg_glucose, "mg/dL"),
-    });
-  return rows;
+/** Build the big heading value string for the markdown detail */
+function headingValue(metric: MetricName, value: number | undefined): string {
+  if (value == null) return "—";
+  if (DURATION_METRICS.has(metric)) return formatDuration(value);
+  const unit = METRIC_UNITS[metric];
+  return fmt(value, unit ?? "");
+}
+
+function trendLine(
+  metric: MetricName,
+  value: number | undefined,
+  series: Array<number | undefined>,
+): string {
+  const delta = deltaVsAverage(value, series);
+  if (!delta) return "";
+  const { delta: d, pct, avg } = delta;
+  if (Math.abs(pct) <= 1) return "";
+
+  const bigMove = Math.abs(pct) > 5;
+  const up = d > 0;
+  const arrow = up ? (bigMove ? "⏫" : "⬆️") : bigMove ? "⏬" : "⬇️";
+  const sign = d > 0 ? "+" : "";
+  const deltaStr = DURATION_METRICS.has(metric)
+    ? formatDuration(Math.abs(d))
+    : `${sign}${Number.isInteger(d) ? d : d.toFixed(1)}`;
+  const avgStr = DURATION_METRICS.has(metric) ? formatDuration(avg) : fmt(avg);
+
+  return `${arrow} **${deltaStr}** vs 7-day average (${avgStr})`;
+}
+
+function detailMarkdown(
+  metric: MetricName,
+  value: number | undefined,
+  series: Array<number | undefined>,
+  insight: Insight,
+): string {
+  const heading = headingValue(metric, value);
+  const lines: string[] = [];
+
+  lines.push(`# ${heading}`);
+  lines.push(`## ${METRIC_LABELS[metric]}`);
+  lines.push("");
+
+  if (insight.status !== "neutral") {
+    const statusLine = insight.label
+      ? `**${insight.label}** — ${insight.context}`
+      : insight.context;
+    lines.push(statusLine);
+  }
+
+  if (insight.recommendation) {
+    lines.push("");
+    lines.push(`**Recommend:** ${insight.recommendation}`);
+  }
+
+  const trend = trendLine(metric, value, series);
+  if (trend) {
+    lines.push("");
+    lines.push(trend);
+  }
+
+  return lines.join("\n");
 }
 
 export default function Today() {
-  const fetcher = useCallback(() => getDay(today()), []);
+  const range = useCallback(() => lastNDaysEpoch(7), [])();
+  const fetcher = useCallback(() => getRange(range.start, range.end), [range]);
   const { data, stale, loading, missingToken, error, reload } =
-    useMetrics<DailyMetrics>(fetcher);
+    useMetrics<DailyMetricsRange>(fetcher);
+
+  const refresh = useCallback(async () => {
+    clearRange(range.start, range.end);
+    await reload();
+  }, [range, reload]);
 
   if (missingToken) {
     return (
@@ -133,10 +131,23 @@ export default function Today() {
     );
   }
 
-  const rows = data ? rowsFor(data) : [];
+  // Today is the last element of the sorted range
+  const sorted = data
+    ? [...data].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
+    : [];
+  const todayData = sorted[sorted.length - 1] ?? null;
+
+  const metrics = Object.keys(METRIC_LABELS) as MetricName[];
+  const availableMetrics = todayData
+    ? metrics.filter((m) => todayData[m] != null)
+    : [];
 
   return (
-    <List isLoading={loading} navigationTitle={`Today · ${today()}`}>
+    <List
+      isLoading={loading}
+      isShowingDetail={!loading && !!data}
+      navigationTitle={`Today's Health`}
+    >
       {error && (
         <List.Section title="⚠️ Refresh failed">
           <List.Item title={error.message.slice(0, 80)} />
@@ -148,34 +159,47 @@ export default function Today() {
         </List.Section>
       )}
       <List.Section title="Metrics">
-        {rows.map((row) => (
-          <List.Item
-            key={row.id}
-            title={row.title}
-            accessories={[
-              {
-                tag: {
-                  value: row.value,
-                  color: row.color ?? Color.PrimaryText,
-                },
-              },
-            ]}
-            actions={
-              <ActionPanel>
-                <Action
-                  title="Refresh"
-                  icon={Icon.ArrowClockwise}
-                  shortcut={{ modifiers: ["cmd"], key: "r" }}
-                  onAction={async () => {
-                    clearDay(today());
-                    await reload();
-                  }}
+        {availableMetrics.map((metric) => {
+          const value = todayData?.[metric];
+          const series = sorted.map((d) => d[metric]);
+          const insight = insightFor(metric, value, series);
+          const spark = sparkline(series);
+
+          return (
+            <List.Item
+              key={metric}
+              title={METRIC_LABELS[metric]}
+              icon={{ source: Icon.Circle, tintColor: insight.color }}
+              accessories={[{ text: formatValue(metric, value) }]}
+              detail={
+                <List.Item.Detail
+                  markdown={detailMarkdown(metric, value, series, insight)}
+                  metadata={
+                    spark ? (
+                      <List.Item.Detail.Metadata>
+                        <List.Item.Detail.Metadata.Label
+                          title="7-Day Trend"
+                          text={spark}
+                        />
+                      </List.Item.Detail.Metadata>
+                    ) : undefined
+                  }
                 />
-              </ActionPanel>
-            }
-          />
-        ))}
-        {!loading && rows.length === 0 && (
+              }
+              actions={
+                <ActionPanel>
+                  <Action
+                    title="Refresh"
+                    icon={Icon.ArrowClockwise}
+                    shortcut={{ modifiers: ["cmd"], key: "r" }}
+                    onAction={refresh}
+                  />
+                </ActionPanel>
+              }
+            />
+          );
+        })}
+        {!loading && availableMetrics.length === 0 && (
           <List.Item
             title="No data yet today"
             subtitle="Charge and sync your Ring, then refresh."
