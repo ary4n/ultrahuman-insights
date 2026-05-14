@@ -5,7 +5,7 @@ import {
   Icon,
   openExtensionPreferences,
 } from "@raycast/api";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { getRange, clearRange } from "./lib/cache";
 import { DailyMetricsRange } from "./lib/types";
 import { fmt, lastNDaysEpoch, sparkline } from "./lib/format";
@@ -50,18 +50,15 @@ function markdownFor(
 }
 
 export default function Hrv() {
-  const fetcher = useCallback(() => {
-    const { start, end } = lastNDaysEpoch(7);
-    return getRange(start, end);
-  }, []);
+  const range = useMemo(() => lastNDaysEpoch(7), []);
+  const fetcher = useCallback(() => getRange(range.start, range.end), [range]);
   const { data, stale, loading, missingToken, error, reload } =
     useMetrics<DailyMetricsRange>(fetcher);
 
   const refresh = useCallback(async () => {
-    const { start, end } = lastNDaysEpoch(7);
-    clearRange(start, end);
+    clearRange(range.start, range.end);
     await reload();
-  }, [reload]);
+  }, [range, reload]);
 
   const markdown = missingToken
     ? "# Set your Ultrahuman API token\n\nOpen preferences and paste your Partner API token."
