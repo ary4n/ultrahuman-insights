@@ -14,7 +14,6 @@ import { insightFor, deltaVsAverage } from "./lib/insights";
 import { lineChart, colorToHex } from "./lib/charts";
 
 function trendDeltaLine(
-  label: string,
   value: number | undefined,
   unit: string,
   series: Array<number | undefined>,
@@ -66,11 +65,8 @@ function markdownFor(
   }
   lines.push("");
 
-  // HRV summary line with delta
-  lines.push(trendDeltaLine("HRV", todayEntry?.hrv, "ms", hrvSeries));
-  lines.push(
-    `**Night RHR:** ${fmt(todayEntry?.night_rhr, "bpm")} · **HR Drop:** ${fmt(todayEntry?.hr_drop, "bpm")} · **Resting HR:** ${fmt(todayEntry?.hr, "bpm")}`,
-  );
+  // HRV trend delta line
+  lines.push(trendDeltaLine(todayEntry?.hrv, "ms", hrvSeries));
 
   const shortLabels = sorted.map((r) => {
     if (!r.date) return "";
@@ -119,6 +115,68 @@ function markdownFor(
   return lines.join("\n");
 }
 
+function HrvMetadata({ range }: { range: DailyMetricsRange }) {
+  const sorted = [...range].sort((a, b) =>
+    (a.date ?? "").localeCompare(b.date ?? ""),
+  );
+  const today = sorted[sorted.length - 1];
+  if (!today) return null;
+
+  const hrvSeries = sorted.map((d) => d.hrv);
+  const rhrSeries = sorted.map((d) => d.night_rhr);
+  const insight = insightFor("hrv", today.hrv, hrvSeries);
+
+  // Compute 7-day averages (exclude today = last element)
+  const hrvAvg =
+    hrvSeries.length > 1
+      ? (() => {
+          const base = hrvSeries
+            .slice(0, -1)
+            .filter((v): v is number => v != null);
+          return base.length > 0
+            ? base.reduce((a, b) => a + b, 0) / base.length
+            : null;
+        })()
+      : null;
+
+  const rhrAvg =
+    rhrSeries.length > 1
+      ? (() => {
+          const base = rhrSeries
+            .slice(0, -1)
+            .filter((v): v is number => v != null);
+          return base.length > 0
+            ? base.reduce((a, b) => a + b, 0) / base.length
+            : null;
+        })()
+      : null;
+
+  return (
+    <Detail.Metadata>
+      <Detail.Metadata.Label
+        title="HRV"
+        text={{ value: fmt(today.hrv, "ms"), color: insight.color }}
+        icon={{ source: Icon.Heartbeat, tintColor: insight.color }}
+      />
+      <Detail.Metadata.Label
+        title="Night RHR"
+        text={fmt(today.night_rhr, "bpm")}
+      />
+      <Detail.Metadata.Label title="HR Drop" text={fmt(today.hr_drop, "bpm")} />
+      <Detail.Metadata.Label title="Resting HR" text={fmt(today.hr, "bpm")} />
+      <Detail.Metadata.Separator />
+      <Detail.Metadata.Label
+        title="7-day HRV avg"
+        text={hrvAvg != null ? fmt(Math.round(hrvAvg), "ms") : "—"}
+      />
+      <Detail.Metadata.Label
+        title="7-day RHR avg"
+        text={rhrAvg != null ? fmt(Math.round(rhrAvg), "bpm") : "—"}
+      />
+    </Detail.Metadata>
+  );
+}
+
 export default function Hrv() {
   const dateKey = todayDateKey();
   const range = useMemo(() => lastNDaysEpoch(7), [dateKey]);
@@ -131,31 +189,64 @@ export default function Hrv() {
     await reload();
   }, [range, reload]);
 
-  const markdown = missingToken
-    ? "# Set your Ultrahuman API token\n\nOpen preferences and paste your Partner API token."
-    : data
-      ? markdownFor(data, stale, error)
-      : loading
-        ? "Loading…"
-        : "No data yet.";
+  const sorted = useMemo(
+    () =>
+      data
+        ? [...data].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
+        : [],
+    [data],
+  );
+  const todayEntry = sorted[sorted.length - 1];
+  const copyValue =
+    todayEntry?.hrv != null ? `HRV: ${todayEntry.hrv} ms` : null;
+
+  if (missingToken) {
+    return (
+      <Detail
+        markdown="# Set your Ultrahuman API token\n\nOpen extension preferences and paste your Partner API token."
+        actions={
+          <ActionPanel>
+            <Action
+              title="Open Preferences"
+              icon={Icon.Key}
+              onAction={openExtensionPreferences}
+            />
+          </ActionPanel>
+        }
+      />
+    );
+  }
+
+  const markdown = data
+    ? markdownFor(data, stale, error)
+    : loading
+      ? "Loading…"
+      : "No data yet.";
 
   return (
     <Detail
       isLoading={loading}
       markdown={markdown}
+      metadata={data ? <HrvMetadata range={data} /> : undefined}
       actions={
         <ActionPanel>
-          {missingToken ? (
-            <Action
-              title="Open Preferences"
-              onAction={openExtensionPreferences}
-            />
-          ) : (
-            <Action
-              title="Refresh"
-              icon={Icon.ArrowClockwise}
-              shortcut={{ modifiers: ["cmd"], key: "r" }}
-              onAction={refresh}
+          <Action
+            title="Refresh"
+            icon={Icon.ArrowClockwise}
+            shortcut={{ modifiers: ["cmd"], key: "r" }}
+            onAction={refresh}
+          />
+          <Action
+            title="Open Preferences"
+            icon={Icon.Cog}
+            shortcut={{ modifiers: ["cmd"], key: "," }}
+            onAction={openExtensionPreferences}
+          />
+          {copyValue && (
+            <Action.CopyToClipboard
+              title="Copy HRV"
+              content={copyValue}
+              shortcut={{ modifiers: ["cmd"], key: "c" }}
             />
           )}
         </ActionPanel>

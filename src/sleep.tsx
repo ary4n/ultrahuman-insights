@@ -38,7 +38,7 @@ function markdownFor(
 
   const lines: string[] = [];
 
-  // Headline
+  // Headline — compact (values now live in metadata rail)
   const headline =
     score != null ? `# ${insight.emoji} Sleep Score: ${score}` : "# Sleep";
   lines.push(headline);
@@ -68,11 +68,6 @@ function markdownFor(
       `${arrow} **${Math.abs(delta.pct).toFixed(0)}%** vs 7-day average (avg: ${delta.avg.toFixed(0)})`,
     );
   }
-
-  lines.push("");
-  lines.push(
-    `**Total:** ${formatDuration(d.total_sleep)} · **Efficiency:** ${fmt(d.sleep_efficiency, "%")}`,
-  );
 
   // Sleep stages bar
   lines.push("");
@@ -105,28 +100,60 @@ function markdownFor(
     if (chart) lines.push(chart);
   }
 
-  // Vitals during sleep
-  lines.push("");
-  lines.push("## Vitals During Sleep");
-  lines.push(`- **HRV:** ${fmt(d.hrv, "ms")}`);
-  lines.push(`- **Night RHR:** ${fmt(d.night_rhr, "bpm")}`);
-  lines.push(`- **HR Drop:** ${fmt(d.hr_drop, "bpm")}`);
-  lines.push(
-    `- **Average Body Temperature:** ${fmt(d.avg_body_temperature, "°C")}`,
-  );
-  lines.push(
-    `- **Temperature Deviation:** ${fmt(d.temperature_deviation, "°C")}`,
-  );
-
-  // Quality
-  lines.push("");
-  lines.push("## Quality");
-  lines.push(`- **Restorative Sleep:** ${fmt(d.restorative_sleep, "%")}`);
-  lines.push(`- **Sleep Cycles:** ${fmt(d.sleep_cycles)}`);
-  lines.push(`- **Tosses & Turns:** ${fmt(d.tosses_turns)}`);
-  lines.push(`- **Morning Alertness:** ${fmt(d.morning_alertness)}`);
-
   return lines.join("\n");
+}
+
+function SleepMetadata({ range }: { range: DailyMetricsRange }) {
+  const sorted = [...range].sort((a, b) =>
+    (a.date ?? "").localeCompare(b.date ?? ""),
+  );
+  const d = sorted[sorted.length - 1];
+  if (!d) return null;
+
+  const scoreSeries = sorted.map((r) => r.sleep_score);
+  const insight = insightFor("sleep_score", d.sleep_score, scoreSeries);
+
+  return (
+    <Detail.Metadata>
+      <Detail.Metadata.Label
+        title="Sleep Score"
+        text={{ value: String(d.sleep_score ?? "—"), color: insight.color }}
+        icon={{ source: Icon.Moon, tintColor: insight.color }}
+      />
+      <Detail.Metadata.Label
+        title="Total Sleep"
+        text={formatDuration(d.total_sleep)}
+      />
+      <Detail.Metadata.Label
+        title="Sleep Efficiency"
+        text={fmt(d.sleep_efficiency, "%")}
+      />
+      <Detail.Metadata.Separator />
+      <Detail.Metadata.Label title="REM" text={formatDuration(d.rem_sleep)} />
+      <Detail.Metadata.Label title="Deep" text={formatDuration(d.deep_sleep)} />
+      <Detail.Metadata.Label
+        title="Light"
+        text={formatDuration(d.light_sleep)}
+      />
+      <Detail.Metadata.Separator />
+      <Detail.Metadata.Label title="HRV" text={fmt(d.hrv, "ms")} />
+      <Detail.Metadata.Label title="Night RHR" text={fmt(d.night_rhr, "bpm")} />
+      <Detail.Metadata.Label
+        title="Avg Body Temp"
+        text={fmt(d.avg_body_temperature, "°C")}
+      />
+      <Detail.Metadata.Separator />
+      <Detail.Metadata.Label
+        title="Restorative"
+        text={fmt(d.restorative_sleep, "%")}
+      />
+      <Detail.Metadata.Label title="Sleep Cycles" text={fmt(d.sleep_cycles)} />
+      <Detail.Metadata.Label
+        title="Tosses & Turns"
+        text={fmt(d.tosses_turns)}
+      />
+    </Detail.Metadata>
+  );
 }
 
 export default function Sleep() {
@@ -141,31 +168,67 @@ export default function Sleep() {
     await reload();
   }, [range, reload]);
 
-  const markdown = missingToken
-    ? "# Set your Ultrahuman API token\n\nOpen preferences and paste your Partner API token."
-    : data
-      ? markdownFor(data, stale, error)
-      : loading
-        ? "Loading…"
-        : "No data yet.";
+  // Determine the primary value for Copy action
+  const sorted = useMemo(
+    () =>
+      data
+        ? [...data].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
+        : [],
+    [data],
+  );
+  const todayEntry = sorted[sorted.length - 1];
+  const copyValue =
+    todayEntry?.sleep_score != null
+      ? `Sleep Score: ${todayEntry.sleep_score}`
+      : null;
+
+  if (missingToken) {
+    return (
+      <Detail
+        markdown="# Set your Ultrahuman API token\n\nOpen extension preferences and paste your Partner API token."
+        actions={
+          <ActionPanel>
+            <Action
+              title="Open Preferences"
+              icon={Icon.Key}
+              onAction={openExtensionPreferences}
+            />
+          </ActionPanel>
+        }
+      />
+    );
+  }
+
+  const markdown = data
+    ? markdownFor(data, stale, error)
+    : loading
+      ? "Loading…"
+      : "No data yet.";
 
   return (
     <Detail
       isLoading={loading}
       markdown={markdown}
+      metadata={data ? <SleepMetadata range={data} /> : undefined}
       actions={
         <ActionPanel>
-          {missingToken ? (
-            <Action
-              title="Open Preferences"
-              onAction={openExtensionPreferences}
-            />
-          ) : (
-            <Action
-              title="Refresh"
-              icon={Icon.ArrowClockwise}
-              shortcut={{ modifiers: ["cmd"], key: "r" }}
-              onAction={refresh}
+          <Action
+            title="Refresh"
+            icon={Icon.ArrowClockwise}
+            shortcut={{ modifiers: ["cmd"], key: "r" }}
+            onAction={refresh}
+          />
+          <Action
+            title="Open Preferences"
+            icon={Icon.Cog}
+            shortcut={{ modifiers: ["cmd"], key: "," }}
+            onAction={openExtensionPreferences}
+          />
+          {copyValue && (
+            <Action.CopyToClipboard
+              title="Copy Sleep Score"
+              content={copyValue}
+              shortcut={{ modifiers: ["cmd"], key: "c" }}
             />
           )}
         </ActionPanel>
