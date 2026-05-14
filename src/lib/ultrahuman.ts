@@ -5,8 +5,7 @@ const BASE_URL = "https://partner.ultrahuman.com/api/v1/partner";
 const FETCH_TIMEOUT_MS = 10_000;
 
 const REDACTED = "<redacted>";
-const JWT_PATTERN =
-  /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g;
+const JWT_PATTERN = /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g;
 function sanitize(s: string): string {
   return s.replace(JWT_PATTERN, REDACTED).slice(0, 200);
 }

@@ -8,7 +8,12 @@ import {
 import { useCallback, useMemo } from "react";
 import { getRange, clearRange } from "./lib/cache";
 import { DailyMetricsRange } from "./lib/types";
-import { formatDuration, fmt, lastNDaysEpoch, todayDateKey } from "./lib/format";
+import {
+  formatDuration,
+  fmt,
+  lastNDaysEpoch,
+  todayDateKey,
+} from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
 import { insightFor, deltaVsAverage } from "./lib/insights";
 import { lineChart, stagesBar, colorToHex } from "./lib/charts";
