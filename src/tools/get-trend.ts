@@ -1,5 +1,5 @@
 import { getRange } from "../lib/cache";
-import { lastNDaysEpoch } from "../lib/format";
+import { lastNDaysEpoch, formatMetricValue, today } from "../lib/format";
 import { METRIC_LABELS, MetricName } from "../lib/types";
 
 const VALID_METRICS = Object.keys(METRIC_LABELS) as MetricName[];
@@ -46,16 +46,23 @@ export default async function tool(input: Input) {
 
   const series = [...data]
     .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
-    .map((d) => ({
-      date: d.date,
-      value: d[input.metric] ?? null,
-    }));
+    .map((d) => {
+      const value = d[input.metric] ?? null;
+      return {
+        date: d.date,
+        value,
+        formatted_value:
+          value != null ? formatMetricValue(input.metric, value) : "—",
+      };
+    });
 
   return {
+    date: today(),
+    as_of: new Date().toISOString(),
+    stale,
     metric: input.metric,
     label: METRIC_LABELS[input.metric] ?? input.metric,
     days,
-    stale,
     series,
   };
 }

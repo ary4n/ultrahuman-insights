@@ -1,4 +1,5 @@
 import { Color } from "@raycast/api";
+import { MetricName } from "./types";
 
 /** Format a duration in minutes as "Xh Ym". Returns "—" for null/undefined/0. */
 export function formatDuration(minutes: number | undefined | null): string {
@@ -64,6 +65,40 @@ export function lastNDaysEpoch(
 /** Today's date as YYYY-MM-DD — same value as today(). Use as a useMemo dep for midnight rollover. */
 export function todayDateKey(): string {
   return today();
+}
+
+// ---------------------------------------------------------------------------
+// Metric value formatter (shared by tools and view files)
+// ---------------------------------------------------------------------------
+
+const DURATION_METRIC_NAMES = new Set<MetricName>([
+  "total_sleep",
+  "rem_sleep",
+  "deep_sleep",
+  "light_sleep",
+]);
+
+const METRIC_UNIT_MAP: Partial<Record<MetricName, string>> = {
+  hrv: "ms",
+  night_rhr: "bpm",
+  hr: "bpm",
+  temp: "°C",
+  sleep_efficiency: "%",
+  spo2: "%",
+};
+
+/**
+ * Format a metric value with its appropriate unit / duration string.
+ * Returns "—" for null/undefined.
+ */
+export function formatMetricValue(
+  metric: MetricName,
+  value: number | undefined | null,
+): string {
+  if (value == null) return "—";
+  if (DURATION_METRIC_NAMES.has(metric)) return formatDuration(value);
+  const unit = METRIC_UNIT_MAP[metric];
+  return fmt(value, unit ?? "");
 }
 
 /** ASCII sparkline for a series of numbers (last N values). Missing values render as space. */

@@ -7,9 +7,11 @@ import { today } from "../lib/format";
  * or any unscoped question about current health state.
  */
 export default async function tool() {
-  const { data, stale } = await getDay(today());
+  const dateStr = today();
+  const { data, stale } = await getDay(dateStr);
   return {
-    date: today(),
+    date: dateStr,
+    as_of: new Date().toISOString(),
     stale,
     metrics: data,
   };

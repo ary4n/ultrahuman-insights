@@ -1,5 +1,5 @@
 import { getDay } from "../lib/cache";
-import { today } from "../lib/format";
+import { today, formatMetricValue } from "../lib/format";
 import { METRIC_LABELS, MetricName } from "../lib/types";
 
 const VALID_METRICS = Object.keys(METRIC_LABELS) as MetricName[];
@@ -46,12 +46,18 @@ export default async function tool(input: Input) {
   const date = input.date ?? today();
   const { data, stale } = await getDay(date);
   const value = data[input.metric];
+  const numericValue = value ?? null;
   return {
     date,
+    as_of: new Date().toISOString(),
     stale,
     metric: input.metric,
     label: METRIC_LABELS[input.metric] ?? input.metric,
-    value: value ?? null,
+    value: numericValue,
+    formatted_value:
+      numericValue != null
+        ? formatMetricValue(input.metric, numericValue)
+        : "—",
     available: value != null,
   };
 }
