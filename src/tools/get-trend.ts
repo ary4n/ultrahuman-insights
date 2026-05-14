@@ -1,10 +1,28 @@
 import { getRange } from "../lib/cache";
 import { lastNDaysEpoch } from "../lib/format";
-import { METRIC_LABELS, MetricName } from "../lib/types";
+import { METRIC_LABELS } from "../lib/types";
 
 type Input = {
-  /** Which metric. See get-metric for the list of allowed values. */
-  metric: MetricName;
+  /** Which metric. One of: sleep_score, total_sleep, rem_sleep, deep_sleep,
+   * light_sleep, sleep_efficiency, hrv, night_rhr, hr, recovery_index,
+   * movement_index, temp, spo2, vo2_max, steps, active_minutes. */
+  metric:
+    | "sleep_score"
+    | "total_sleep"
+    | "rem_sleep"
+    | "deep_sleep"
+    | "light_sleep"
+    | "sleep_efficiency"
+    | "hrv"
+    | "night_rhr"
+    | "hr"
+    | "recovery_index"
+    | "movement_index"
+    | "temp"
+    | "spo2"
+    | "vo2_max"
+    | "steps"
+    | "active_minutes";
   /** Number of days of history (1–7). Defaults to 7. */
   days?: number;
 };

@@ -1,6 +1,6 @@
 import { getDay } from "../lib/cache";
 import { today } from "../lib/format";
-import { METRIC_LABELS, MetricName } from "../lib/types";
+import { METRIC_LABELS } from "../lib/types";
 
 type Input = {
   /**
@@ -8,7 +8,23 @@ type Input = {
    * light_sleep, sleep_efficiency, hrv, night_rhr, hr, recovery_index, movement_index,
    * temp, spo2, vo2_max, steps, active_minutes.
    */
-  metric: MetricName;
+  metric:
+    | "sleep_score"
+    | "total_sleep"
+    | "rem_sleep"
+    | "deep_sleep"
+    | "light_sleep"
+    | "sleep_efficiency"
+    | "hrv"
+    | "night_rhr"
+    | "hr"
+    | "recovery_index"
+    | "movement_index"
+    | "temp"
+    | "spo2"
+    | "vo2_max"
+    | "steps"
+    | "active_minutes";
   /**
    * Optional date in YYYY-MM-DD. Defaults to today.
    */
