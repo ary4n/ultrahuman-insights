@@ -6,7 +6,7 @@ import {
   openExtensionPreferences,
 } from "@raycast/api";
 import { useCallback } from "react";
-import { getRange } from "./lib/cache";
+import { getRange, clearRange } from "./lib/cache";
 import { DailyMetricsRange } from "./lib/types";
 import { fmt, lastNDaysEpoch, sparkline } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
@@ -57,6 +57,12 @@ export default function Hrv() {
   const { data, stale, loading, missingToken, error, reload } =
     useMetrics<DailyMetricsRange>(fetcher);
 
+  const refresh = useCallback(async () => {
+    const { start, end } = lastNDaysEpoch(7);
+    clearRange(start, end);
+    await reload();
+  }, [reload]);
+
   const markdown = missingToken
     ? "# Set your Ultrahuman API token\n\nOpen preferences and paste your Partner API token."
     : data
@@ -81,7 +87,7 @@ export default function Hrv() {
               title="Refresh"
               icon={Icon.ArrowClockwise}
               shortcut={{ modifiers: ["cmd"], key: "r" }}
-              onAction={() => reload()}
+              onAction={refresh}
             />
           )}
         </ActionPanel>

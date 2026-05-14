@@ -55,6 +55,11 @@ export function clearDay(date: string): void {
   cache.remove(`daily:${date}`);
 }
 
+/** Force a refresh for a range on next read. */
+export function clearRange(startEpoch: number, endEpoch: number): void {
+  cache.remove(`range:${startEpoch}:${endEpoch}`);
+}
+
 /** Wipe everything. Useful for a "Reset cache" debug action. */
 export function clearAll(): void {
   cache.clear();

@@ -7,7 +7,7 @@ import {
   openExtensionPreferences,
 } from "@raycast/api";
 import { useCallback } from "react";
-import { getRange } from "./lib/cache";
+import { getRange, clearRange } from "./lib/cache";
 import { DailyMetricsRange, METRIC_LABELS, MetricName } from "./lib/types";
 import { fmt, lastNDaysEpoch, sparkline } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
@@ -56,6 +56,12 @@ export default function Trends() {
   }, []);
   const { data, stale, loading, missingToken, error, reload } =
     useMetrics<DailyMetricsRange>(fetcher);
+
+  const refresh = useCallback(async () => {
+    const { start, end } = lastNDaysEpoch(7);
+    clearRange(start, end);
+    await reload();
+  }, [reload]);
 
   if (missingToken) {
     return (
@@ -110,7 +116,7 @@ export default function Trends() {
                       <Action
                         title="Refresh"
                         icon={Icon.ArrowClockwise}
-                        onAction={() => reload()}
+                        onAction={refresh}
                       />
                     </ActionPanel>
                   }
