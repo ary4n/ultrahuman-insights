@@ -1,5 +1,5 @@
 import { Color } from "@raycast/api";
-import { MetricName } from "./types";
+import { DailyMetrics, MetricName } from "./types";
 
 /** Format a duration in minutes as "Xh Ym". Returns "—" for null/undefined/0. */
 export function formatDuration(minutes: number | undefined | null): string {
@@ -99,6 +99,41 @@ export function formatMetricValue(
   if (DURATION_METRIC_NAMES.has(metric)) return formatDuration(value);
   const unit = METRIC_UNIT_MAP[metric];
   return fmt(value, unit ?? "");
+}
+
+/**
+ * From a date-sorted range, return the most recent entry where the given field is non-null.
+ * Falls back to the last entry if none satisfy the predicate.
+ */
+export function latestWithField<K extends keyof DailyMetrics>(
+  range: DailyMetrics[],
+  field: K,
+): DailyMetrics | null {
+  if (range.length === 0) return null;
+  for (let i = range.length - 1; i >= 0; i--) {
+    if (range[i][field] != null) return range[i];
+  }
+  return range[range.length - 1] ?? null;
+}
+
+/**
+ * Pretty-print a YYYY-MM-DD date as "Today", "Yesterday", or "Thu, May 14".
+ * Returns null if the input is undefined or invalid.
+ */
+export function relativeDateLabel(dateStr: string | undefined): string | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + "T12:00:00");
+  if (Number.isNaN(d.getTime())) return null;
+  const todayKey = todayDateKey();
+  if (dateStr === todayKey) return "Today";
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (formatDate(yesterday) === dateStr) return "Yesterday";
+  return d.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 /** ASCII sparkline for a series of numbers (last N values). Missing values render as space. */
