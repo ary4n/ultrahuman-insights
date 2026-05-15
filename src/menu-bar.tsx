@@ -7,18 +7,28 @@ import {
   LaunchType,
 } from "@raycast/api";
 import { useCallback, useMemo } from "react";
-import { getDay, clearDay } from "./lib/cache";
-import { today, formatDuration, fmt } from "./lib/format";
+import { getRange, clearRange } from "./lib/cache";
+import {
+  formatDuration,
+  fmt,
+  lastNDaysEpoch,
+  todayDateKey,
+  latestWithField,
+  relativeDateLabel,
+} from "./lib/format";
+import { DailyMetricsRange } from "./lib/types";
 import { useMetrics } from "./lib/use-metrics";
 import { insightFor, statusColor } from "./lib/insights";
 
 export default function MenuBar() {
-  const dateKey = today();
-  const fetcher = useCallback(() => getDay(dateKey), [dateKey]);
+  const dateKey = todayDateKey();
+  // Fetch last 2 days so we can fall back to yesterday's sleep when today
+  // hasn't synced yet (e.g. queried at 1am before Ring upload).
+  const range = useMemo(() => lastNDaysEpoch(2), [dateKey]);
+  const fetcher = useCallback(() => getRange(range.start, range.end), [range]);
 
-  // Legacy charts directory cleanup is handled automatically on charts.ts import.
   const { data, stale, loading, missingToken, error, reload } =
-    useMetrics(fetcher);
+    useMetrics<DailyMetricsRange>(fetcher);
 
   if (missingToken) {
     return (
@@ -34,8 +44,30 @@ export default function MenuBar() {
     );
   }
 
-  const score = data?.sleep_score;
+  // Sort the range and pick the most recent entry that has sleep data.
+  const sortedRange = useMemo(
+    () =>
+      data
+        ? [...data].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
+        : [],
+    [data],
+  );
+  const sleepEntry = useMemo(
+    () => latestWithField(sortedRange, "sleep_score"),
+    [sortedRange],
+  );
+
+  // Recovery/movement metrics always come from the last entry (today's).
+  const latestEntry = sortedRange[sortedRange.length - 1] ?? null;
+
+  const score = sleepEntry?.sleep_score;
   const hasError = error != null;
+
+  // When the sleep entry isn't today's, show a subtle date hint in the section.
+  const sleepDate = sleepEntry?.date;
+  const sleepDateLabel = relativeDateLabel(sleepDate);
+  const sleepIsYesterday =
+    sleepDate != null && sleepDate !== todayDateKey() && sleepDateLabel != null;
 
   // Native Moon icon tinted by status
   const moonIcon = useMemo(() => {
@@ -58,44 +90,50 @@ export default function MenuBar() {
       )}
       {stale && <MenuBarExtra.Item title="⚠️ Showing cached data" />}
       <MenuBarExtra.Section title="Sleep">
+        {sleepIsYesterday && (
+          <MenuBarExtra.Item
+            title="Last night's sleep"
+            subtitle={sleepDateLabel ?? ""}
+          />
+        )}
         <MenuBarExtra.Item
           title="Total"
-          subtitle={formatDuration(data?.total_sleep)}
+          subtitle={formatDuration(sleepEntry?.total_sleep)}
         />
         <MenuBarExtra.Item
           title="REM"
-          subtitle={formatDuration(data?.rem_sleep)}
+          subtitle={formatDuration(sleepEntry?.rem_sleep)}
         />
         <MenuBarExtra.Item
           title="Deep"
-          subtitle={formatDuration(data?.deep_sleep)}
+          subtitle={formatDuration(sleepEntry?.deep_sleep)}
         />
         <MenuBarExtra.Item
           title="Light"
-          subtitle={formatDuration(data?.light_sleep)}
+          subtitle={formatDuration(sleepEntry?.light_sleep)}
         />
         <MenuBarExtra.Item
           title="Efficiency"
-          subtitle={fmt(data?.sleep_efficiency, "%")}
+          subtitle={fmt(sleepEntry?.sleep_efficiency, "%")}
         />
         <MenuBarExtra.Item
           title="Restorative"
-          subtitle={fmt(data?.restorative_sleep, "%")}
+          subtitle={fmt(sleepEntry?.restorative_sleep, "%")}
         />
       </MenuBarExtra.Section>
       <MenuBarExtra.Section title="Recovery">
-        <MenuBarExtra.Item title="HRV" subtitle={fmt(data?.hrv, "ms")} />
+        <MenuBarExtra.Item title="HRV" subtitle={fmt(latestEntry?.hrv, "ms")} />
         <MenuBarExtra.Item
           title="Night RHR"
-          subtitle={fmt(data?.night_rhr, "bpm")}
+          subtitle={fmt(latestEntry?.night_rhr, "bpm")}
         />
         <MenuBarExtra.Item
           title="Recovery Index"
-          subtitle={fmt(data?.recovery_index)}
+          subtitle={fmt(latestEntry?.recovery_index)}
         />
         <MenuBarExtra.Item
           title="Movement Index"
-          subtitle={fmt(data?.movement_index)}
+          subtitle={fmt(latestEntry?.movement_index)}
         />
       </MenuBarExtra.Section>
       <MenuBarExtra.Section>
@@ -108,7 +146,7 @@ export default function MenuBar() {
         <MenuBarExtra.Item
           title="Refresh Now"
           onAction={async () => {
-            clearDay(today());
+            clearRange(range.start, range.end);
             await reload();
           }}
         />

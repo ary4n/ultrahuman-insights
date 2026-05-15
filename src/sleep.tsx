@@ -13,6 +13,8 @@ import {
   fmt,
   lastNDaysEpoch,
   todayDateKey,
+  latestWithField,
+  relativeDateLabel,
 } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
 import { insightFor, deltaVsAverage } from "./lib/insights";
@@ -27,7 +29,11 @@ function markdownFor(
   const sorted = [...range].sort((a, b) =>
     (a.date ?? "").localeCompare(b.date ?? ""),
   );
-  const d = sorted[sorted.length - 1];
+  if (sorted.length === 0) return "No data yet.";
+
+  // Use the most recent entry that has a sleep_score rather than blindly
+  // picking today's entry (which may be empty when queried before sync).
+  const d = latestWithField(sorted, "sleep_score");
   if (!d) return "No data yet.";
 
   const scoreSeries = sorted.map((r) => r.sleep_score);
@@ -38,6 +44,14 @@ function markdownFor(
   const stale_note = stale ? "\n> ⚠️ Cached — network unreachable\n" : "";
 
   const lines: string[] = [];
+
+  // Show a banner when the displayed entry isn't from today
+  const isStaleDate = d.date != null && d.date !== todayDateKey();
+  const dateLabel = relativeDateLabel(d.date);
+  if (isStaleDate && dateLabel) {
+    lines.push(`> 📅 ${dateLabel}'s sleep — today's not recorded yet`);
+    lines.push("");
+  }
 
   // Headline — compact (values now live in metadata rail)
   const headline =
@@ -83,7 +97,7 @@ function markdownFor(
     lines.push("_No stage data available_");
   }
 
-  // Sleep score trend chart (7 days)
+  // Sleep score trend chart (7 days) — uses full range, not just the sleep entry
   const validScoreCount = scoreSeries.filter((v) => v != null).length;
   if (validScoreCount >= 3) {
     lines.push("");
@@ -108,7 +122,9 @@ function SleepMetadata({ range }: { range: DailyMetricsRange }) {
   const sorted = [...range].sort((a, b) =>
     (a.date ?? "").localeCompare(b.date ?? ""),
   );
-  const d = sorted[sorted.length - 1];
+  // Use the most recent entry with a sleep_score (gracefully handles early-morning
+  // queries before today's sleep has synced from the Ring).
+  const d = latestWithField(sorted, "sleep_score");
   if (!d) return null;
 
   const scoreSeries = sorted.map((r) => r.sleep_score);
@@ -177,10 +193,10 @@ export default function Sleep() {
         : [],
     [data],
   );
-  const todayEntry = sorted[sorted.length - 1];
+  const sleepEntry = latestWithField(sorted, "sleep_score");
   const copyValue =
-    todayEntry?.sleep_score != null
-      ? `Sleep Score: ${todayEntry.sleep_score}`
+    sleepEntry?.sleep_score != null
+      ? `Sleep Score: ${sleepEntry.sleep_score}`
       : null;
 
   if (missingToken) {

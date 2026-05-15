@@ -13,12 +13,25 @@ import {
   lastNDaysEpoch,
   sparkline,
   todayDateKey,
+  latestWithField,
+  relativeDateLabel,
 } from "./lib/format";
 import { useMetrics } from "./lib/use-metrics";
 import { insightFor, deltaVsAverage, Insight } from "./lib/insights";
 import { metricIcon } from "./lib/icons";
 import { lineChart, colorToHex } from "./lib/charts";
 import { ListStatus } from "./lib/status-view";
+
+// Sleep metrics that should source from the most recent entry with data,
+// not blindly from today's entry (which may be empty before morning sync).
+const SLEEP_METRICS = new Set<MetricName>([
+  "sleep_score",
+  "total_sleep",
+  "rem_sleep",
+  "deep_sleep",
+  "light_sleep",
+  "sleep_efficiency",
+]);
 
 function trendLine(
   metric: MetricName,
@@ -122,11 +135,21 @@ export default function Today() {
         : [],
     [data],
   );
+  // For non-sleep metrics: use the most-recent (today's) entry.
+  // For sleep metrics: use the most recent entry that actually has the field
+  // (yesterday's entry for early-morning queries before the Ring has synced).
   const todayData = sorted[sorted.length - 1] ?? null;
 
   const metrics = Object.keys(METRIC_LABELS) as MetricName[];
+  // Show a metric if either today's entry has it OR (for sleep metrics) the
+  // most recent matching entry has it.
   const availableMetrics = todayData
-    ? metrics.filter((m) => todayData[m] != null)
+    ? metrics.filter((m) => {
+        if (SLEEP_METRICS.has(m)) {
+          return latestWithField(sorted, m)?.[m] != null;
+        }
+        return todayData[m] != null;
+      })
     : [];
 
   return (
@@ -152,19 +175,32 @@ export default function Today() {
       )}
       <List.Section title="Metrics">
         {availableMetrics.map((metric) => {
-          const value = todayData?.[metric];
+          // For sleep metrics, prefer the most recent entry that has the field.
+          const entryForMetric = SLEEP_METRICS.has(metric)
+            ? latestWithField(sorted, metric)
+            : todayData;
+          const value = entryForMetric?.[metric];
           const series = sorted.map((d) => d[metric]);
           const dates = sorted.map((d) => d.date);
           const insight = insightFor(metric, value, series);
           const formattedValue = formatMetricValue(metric, value);
           const copyText = `${METRIC_LABELS[metric]}: ${formattedValue}`;
 
+          // Produce a tooltip when the sleep metric came from a prior night.
+          const sourceDate = entryForMetric?.date;
+          const isStaleDate =
+            SLEEP_METRICS.has(metric) &&
+            sourceDate != null &&
+            sourceDate !== todayDateKey();
+          const dateLabel = isStaleDate ? relativeDateLabel(sourceDate) : null;
+          const tooltip = dateLabel ? `From ${dateLabel}'s sleep` : undefined;
+
           return (
             <List.Item
               key={metric}
               title={METRIC_LABELS[metric]}
               icon={metricIcon(metric, insight.status)}
-              accessories={[{ text: formattedValue }]}
+              accessories={[{ text: formattedValue, tooltip }]}
               detail={
                 <List.Item.Detail
                   markdown={detailMarkdown(
