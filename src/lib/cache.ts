@@ -2,7 +2,7 @@ import { Cache } from "@raycast/api";
 import { fetchDay, fetchRange } from "./ultrahuman";
 import { DailyMetrics, DailyMetricsRange } from "./types";
 
-const cache = new Cache({ namespace: "ultrahuman" });
+const cache = new Cache({ namespace: "ultrahuman-insights" });
 const TTL_MS = 5 * 60 * 1000;
 const STALE_MAX_MS = 24 * 60 * 60 * 1000;
 

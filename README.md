@@ -1,6 +1,8 @@
-# Ultrahuman for Raycast
+# Ultrahuman Insights for Raycast
 
-> Surface your Ultrahuman Ring AIR daily health metrics in Raycast — menu bar, commands, and AI tools.
+> Smart insights, AI tools, and trend charts for your Ultrahuman Ring AIR. Native Raycast UI throughout — menu bar score, split-pane lists with `Detail.Metadata` rails, inline SVG trend charts, and three Raycast AI tools.
+
+> **Sibling to the existing `ultrahuman` extension by @joshmillgate.** That one focuses on raw summary views; this one focuses on per-metric insights, smart copy, charts, and Raycast AI integration. Pick whichever fits your workflow — they can coexist.
 
 ## ⚠️ Requirements
 
